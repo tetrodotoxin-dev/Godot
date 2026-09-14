@@ -1,0 +1,19 @@
+; TTX Image Lab: the engine hosts the scene; source Resources select providers.
+config_version=5
+
+[application]
+config/name="TTX Image Lab"
+run/main_scene="res://lab.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=760
+window/size/window_width_override=1440
+window/size/window_height_override=760
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.047, 0.063, 0.094, 1)

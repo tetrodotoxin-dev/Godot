@@ -1,0 +1,259 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://lab.gd" id="1"]
+[ext_resource type="Theme" path="res://theme.tres" id="2"]
+[ext_resource type="PackedScene" path="res://preview.tscn" id="3"]
+
+[sub_resource type="TtxImage" id="Cpu"]
+provider = "cpu"
+
+[sub_resource type="TtxImage" id="Cuda"]
+provider = "cuda"
+
+[sub_resource type="TtxImage" id="Script"]
+provider = "gdscript"
+
+[sub_resource type="TtxImage" id="Overlay"]
+provider = "gdscript"
+
+[node name="Lab" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2")
+script = ExtResource("1")
+cpu_source = SubResource("Cpu")
+cuda_source = SubResource("Cuda")
+script_source = SubResource("Script")
+overlay_source = SubResource("Overlay")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 26
+
+[node name="Page" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Heading" type="VBoxContainer" parent="Margin/Page"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Kicker" type="Label" parent="Margin/Page/Heading"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.90, 0.76, 1)
+theme_override_font_sizes/font_size = 13
+text = "TETRODOTOXIN  /  COMPUTE LAB"
+
+[node name="Title" type="Label" parent="Margin/Page/Heading"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "One image contract. Three providers."
+
+[node name="Subtitle" type="Label" parent="Margin/Page/Heading"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.61, 0.68, 0.78, 1)
+text = "GDScript, C++ and CUDA cooperate through TTX — the client stays the same."
+
+[node name="Controls" type="HBoxContainer" parent="Margin/Page"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Mode" type="OptionButton" parent="Margin/Page/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Same inversion algorithm, or spatial versus FFT convolution"
+
+[node name="Size" type="OptionButton" parent="Margin/Page/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Source dimensions"
+
+[node name="Kernel" type="OptionButton" parent="Margin/Page/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Normalized lens-blur kernel"
+
+[node name="Space" type="Control" parent="Margin/Page/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ChangeSource" type="Button" parent="Margin/Page/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Change source"
+
+[node name="Compare" type="Button" parent="Margin/Page/Controls"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Run comparison"
+
+[node name="Previews" type="HBoxContainer" parent="Margin/Page"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="SourcePreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Title" parent="Margin/Page/Previews/SourcePreview/Content" index="0"]
+text = "01  /  SOURCE"
+
+[node name="Caption" parent="Margin/Page/Previews/SourcePreview/Content" index="3"]
+text = "Fresh pixels · GDScript overlay"
+
+[node name="CpuPreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Title" parent="Margin/Page/Previews/CpuPreview/Content" index="0"]
+text = "02  /  NATIVE C++"
+
+[node name="Caption" parent="Margin/Page/Previews/CpuPreview/Content" index="3"]
+text = "FFTW blur + script overlay"
+
+[node name="CudaPreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Title" parent="Margin/Page/Previews/CudaPreview/Content" index="0"]
+text = "03  /  CUDA"
+
+[node name="Caption" parent="Margin/Page/Previews/CudaPreview/Content" index="3"]
+text = "cuFFT blur + script overlay"
+
+[node name="ScriptPreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Title" parent="Margin/Page/Previews/ScriptPreview/Content" index="0"]
+text = "04  /  GDSCRIPT"
+
+[node name="Caption" parent="Margin/Page/Previews/ScriptPreview/Content" index="3"]
+text = "Spatial blur + script overlay"
+
+[node name="Metrics" type="HBoxContainer" parent="Margin/Page"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="RatioBox" type="VBoxContainer" parent="Margin/Page/Metrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="Margin/Page/Metrics/RatioBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "C++ / CUDA · THIS RUN"
+
+[node name="Ratio" type="Label" parent="Margin/Page/Metrics/RatioBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "—"
+
+[node name="Cpu" type="VBoxContainer" parent="Margin/Page/Metrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CpuMetric" type="Label" parent="Margin/Page/Metrics/Cpu"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "CPU · WARM CONVOLUTION"
+
+[node name="CpuTime" type="Label" parent="Margin/Page/Metrics/Cpu"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Preparing…"
+
+[node name="Cuda" type="VBoxContainer" parent="Margin/Page/Metrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CudaMetric" type="Label" parent="Margin/Page/Metrics/Cuda"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "CUDA · WARM CONVOLUTION"
+
+[node name="CudaTime" type="Label" parent="Margin/Page/Metrics/Cuda"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.90, 0.76, 1)
+theme_override_font_sizes/font_size = 26
+text = "Preparing…"
+
+[node name="Script" type="VBoxContainer" parent="Margin/Page/Metrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ScriptMetric" type="Label" parent="Margin/Page/Metrics/Script"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "GDSCRIPT · SPATIAL CONVOLUTION"
+
+[node name="ScriptTime" type="Label" parent="Margin/Page/Metrics/Script"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Preparing…"
+
+[node name="Summary" type="HBoxContainer" parent="Margin/Page"]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="Margin/Page/Summary"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "PREPARING PROVIDERS"
+
+[node name="Readback" type="Label" parent="Margin/Page/Summary"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+
+[node name="Interaction" type="HBoxContainer" parent="Margin/Page"]
+layout_mode = 2
+
+[node name="Detail" type="Label" parent="Margin/Page/Interaction"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.61, 0.68, 0.78, 1)
+text = "Move the overlay to reuse the existing blur results."
+
+[node name="MoveOverlay" type="Button" parent="Margin/Page/Interaction"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Move overlay →"
+theme_override_colors/font_color = Color(0.51, 0.90, 0.76, 1)
+
+[connection signal="pressed" from="Margin/Page/Controls/Compare" to="." method="compare"]
+[connection signal="pressed" from="Margin/Page/Controls/ChangeSource" to="." method="next_sample"]
+[connection signal="pressed" from="Margin/Page/Interaction/MoveOverlay" to="." method="move_overlay"]
+
+[editable path="Margin/Page/Previews/SourcePreview"]
+[editable path="Margin/Page/Previews/CpuPreview"]
+[editable path="Margin/Page/Previews/CudaPreview"]
+
+[editable path="Margin/Page/Previews/ScriptPreview"]

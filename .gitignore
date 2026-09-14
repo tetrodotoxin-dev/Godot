@@ -1,0 +1,10 @@
+/.bin/
+/bazel-*/
+/build*/
+/.deps/
+/compile_commands.json
+*.gd.uid
+MODULE.bazel.lock
+
+/demo/.godot/
+/demo/addons/godot_ttx/

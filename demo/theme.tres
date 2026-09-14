@@ -1,0 +1,75 @@
+[gd_resource type="Theme" load_steps=6 format=3]
+
+[sub_resource type="StyleBoxFlat" id="Panel"]
+bg_color = Color(0.074, 0.094, 0.137, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.145, 0.180, 0.235, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 18.0
+content_margin_top = 18.0
+content_margin_right = 18.0
+content_margin_bottom = 18.0
+
+[sub_resource type="StyleBoxFlat" id="Button"]
+bg_color = Color(0.102, 0.133, 0.184, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+content_margin_left = 16.0
+content_margin_top = 11.0
+content_margin_right = 16.0
+content_margin_bottom = 11.0
+
+[sub_resource type="StyleBoxFlat" id="Hover"]
+bg_color = Color(0.157, 0.208, 0.267, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+content_margin_left = 16.0
+content_margin_top = 11.0
+content_margin_right = 16.0
+content_margin_bottom = 11.0
+
+[sub_resource type="StyleBoxFlat" id="Pressed"]
+bg_color = Color(0.129, 0.263, 0.259, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+content_margin_left = 16.0
+content_margin_top = 11.0
+content_margin_right = 16.0
+content_margin_bottom = 11.0
+
+[sub_resource type="StyleBoxFlat" id="Focus"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.506, 0.902, 0.757, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[resource]
+default_font_size = 16
+Label/colors/font_color = Color(0.898, 0.929, 0.961, 1)
+Button/styles/normal = SubResource("Button")
+Button/styles/hover = SubResource("Hover")
+Button/styles/pressed = SubResource("Pressed")
+Button/styles/focus = SubResource("Focus")
+OptionButton/styles/normal = SubResource("Button")
+OptionButton/styles/hover = SubResource("Hover")
+OptionButton/styles/pressed = SubResource("Pressed")
+OptionButton/styles/focus = SubResource("Focus")
+PanelContainer/styles/panel = SubResource("Panel")
