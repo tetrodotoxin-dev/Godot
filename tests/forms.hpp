@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "images/provider.hpp"
+#include "imaging/graph/provider.hpp"
 
 namespace Godot::Tests {
 
@@ -12,7 +12,7 @@ namespace Godot::Tests {
 // so both CPU and CUDA must preserve it across real derived results.
 class Forms {
  public:
-  static void check(Images::Provider& provider, Bool device);
+  static void check(Imaging::Graph::Provider& provider, Bool device);
 };
 
 }  // namespace Godot::Tests

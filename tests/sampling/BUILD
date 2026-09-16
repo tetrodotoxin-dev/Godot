@@ -6,14 +6,22 @@ load("@rules_cc//cc:cc_test.bzl", "cc_test")
 cc_test(
     name = "check",
     srcs = ["main.cpp"],
-    deps = ["//sampling:function", "//contracts"],
-    dynamic_deps = ["//:image_runtime"],
-    data = ["//providers/cpu:cpu_provider"] + select({
-        "//:cuda_enabled": ["//providers/cuda:cuda_provider"],
+    args = ["$(rootpath //plugins/cpu:cpu_provider)"] + select({
+        "//:cuda_enabled": ["$(rootpath //plugins/cuda:cuda_provider)"],
         "//conditions:default": [],
     }),
-    args = ["$(rootpath //providers/cpu:cpu_provider)"] + select({
-        "//:cuda_enabled": ["$(rootpath //providers/cuda:cuda_provider)"],
+    data = ["//plugins/cpu:cpu_provider"] + select({
+        "//:cuda_enabled": ["//plugins/cuda:cuda_provider"],
         "//conditions:default": [],
     }),
+    dynamic_deps = [
+        "//:support",
+        "@tetrodotoxin//ttx:runtime",
+    ],
+    deps = [
+        "//gdextension/contracts",
+        "//imaging/contracts",
+        "//sampling:function",
+        "//sampling/contracts",
+    ],
 )

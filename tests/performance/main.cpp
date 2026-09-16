@@ -10,14 +10,14 @@
 
 #include "perimortem/memory/dynamic/bytes.hpp"
 
-#include "contracts/invert.hpp"
-#include "images/call.hpp"
-#include "images/image.hpp"
-#include "images/provider.hpp"
-#include "images/source.hpp"
-#include "operations/standard.hpp"
+#include "imaging/contracts/invert.hpp"
+#include "imaging/graph/call.hpp"
+#include "imaging/graph/image.hpp"
+#include "imaging/graph/provider.hpp"
+#include "imaging/graph/source.hpp"
+#include "imaging/operations/standard.hpp"
 #include "ttx/data/form/compiler.hpp"
-#include "ttx/semantic/simulacra.hpp"
+#include "ttx/semantic/realization/simulacra.hpp"
 
 using namespace Godot;
 using namespace Perimortem;
@@ -68,11 +68,12 @@ static void measure(Core::View::Bytes name, Count iterations, Action action) {
 }
 
 static auto bound(
-    const Images::Image& image,
-    const Images::Operation& operation) -> Ttx::Semantic::Binding {
+    const Imaging::Graph::Image& image,
+    const Imaging::Graph::Operation& operation) -> Imaging::Graph::Invocation {
   return image.bind_operation(operation).visit(
-      [](Ttx::Semantic::Binding binding) { return binding; },
-      [](Ttx::Semantic::Binding::Failure) -> Ttx::Semantic::Binding {
+      [](Imaging::Graph::Invocation binding) { return binding; },
+      [](Ttx::Semantic::Negotiation::Binding::Failure)
+          -> Imaging::Graph::Invocation {
         Core::Diagnostics::Log::fatal(
             "Mechanics could not fulfill inversion."_view);
       });
@@ -82,16 +83,23 @@ static void measure_provider(Core::View::Bytes path, Count operations) {
   Core::Diagnostics::Log::info(path);
   Memory::Allocator::Arena errors;
   auto& provider = accepted(
-      Images::Provider::open(
-          path, Operations::Standard::get_vocabulary(), errors));
+      Imaging::Graph::Provider::open(
+          path, Imaging::Operations::Standard::get_vocabulary(), errors));
   const U8 pixels[] = {1, 2, 3, 255};
   auto image = accepted(
-      Images::Image::create(
+      Imaging::Graph::Image::create(
           provider, 1, 1, Core::View::Bytes(pixels, 4), errors));
   const auto* operation = provider.get_vocabulary().find("invert"_view);
   require(operation != nullptr, "Missing inversion publication."_view);
   const auto binding = bound(image, *operation);
-  const auto handle = binding.get<Contracts::Invert>();
+  const auto handle =
+      image.get_query().bind<Imaging::Contracts::Invert>().visit(
+          [](Imaging::Contracts::Invert value) { return value; },
+          [](Ttx::Semantic::Negotiation::Binding::Failure failure)
+              -> Imaging::Contracts::Invert {
+            Core::Diagnostics::Log::fatal(
+                Imaging::Graph::Image::binding_error(failure));
+          });
   const auto control = image.get_abi();
   const auto query = image.get_query();
 
@@ -106,15 +114,21 @@ static void measure_provider(Core::View::Bytes path, Count operations) {
   });
 
   measure("core_fulfillment"_view, 100000, [&]() -> U64 {
-    return Ttx::Semantic::Simulacra::fulfill<Contracts::Invert>(query).visit(
-        [](const Contracts::Invert::Handle&) -> U64 { return 1; },
-        [](Ttx::Semantic::Binding::Failure) -> U64 { return 0; });
+    return Ttx::Semantic::Realization::Simulacra::fulfill<
+               Imaging::Contracts::Invert>(query)
+        .visit(
+            [](const Imaging::Contracts::Invert&) -> U64 { return 1; },
+            [](Ttx::Semantic::Negotiation::Binding::Failure) -> U64 {
+              return 0;
+            });
   });
   measure("host_fulfillment"_view, 100000, [&]() -> U64 {
     return image.bind_operation(*operation)
         .visit(
-            [](const Ttx::Semantic::Binding&) -> U64 { return 1; },
-            [](Ttx::Semantic::Binding::Failure) -> U64 { return 0; });
+            [](const Imaging::Graph::Invocation&) -> U64 { return 1; },
+            [](Ttx::Semantic::Negotiation::Binding::Failure) -> U64 {
+              return 0;
+            });
   });
 
   // Retaining the callable removes negotiation. Inversion still creates an
@@ -136,14 +150,15 @@ static void measure_provider(Core::View::Bytes path, Count operations) {
     return 1;
   });
 
-  auto& source = Images::Source::create(image);
+  auto& source = Imaging::Graph::Source::create(image);
   measure("fresh_graph_call"_view, operations, [&]() -> U64 {
-    auto& call = Images::Call::create(
-        source, *operation, Core::View::Vector<Images::Call::Argument>());
+    auto& call = Imaging::Graph::Call::create(
+        source, *operation,
+        Core::View::Vector<Imaging::Graph::Call::Argument>());
     auto result = call.evaluate(errors);
     require(
         result.visit(
-            [](const Images::Image&) { return True; },
+            [](const Imaging::Graph::Image&) { return True; },
             [](Core::View::Bytes) { return False; }),
         "Fresh graph call failed."_view);
     const auto evaluations = call.get_evaluations();
@@ -151,23 +166,25 @@ static void measure_provider(Core::View::Bytes path, Count operations) {
     return evaluations;
   });
 
-  // Re-reading an unchanged Call is cache validation, not another inversion.
+  // When neither input changed, the Call can reuse its published image.
+  // This row measures the cost of checking that retained result.
   // It is useful to measure, but reporting this row as callable speed would
   // hide that the implementation did no image work after the first evaluation.
-  auto& cached = Images::Call::create(
-      source, *operation, Core::View::Vector<Images::Call::Argument>());
+  auto& cached = Imaging::Graph::Call::create(
+      source, *operation, Core::View::Vector<Imaging::Graph::Call::Argument>());
   measure("cached_graph_observation"_view, 1000000, [&]() -> U64 {
     cached.evaluate(errors).visit(
-        [](const Images::Image&) {},
+        [](const Imaging::Graph::Image&) {},
         [](Core::View::Bytes error) { Core::Diagnostics::Log::fatal(error); });
     return cached.get_evaluations();
   });
   cached.release();
   source.release();
 
-  // This is the preparation performed in Providers::Image's constructor for
-  // every result. Compile and write both remain in the batch. The descriptions
-  // are identical, so this row identifies work that a shared form could reuse.
+  // This is the preparation performed in Imaging::Publication::Image's
+  // constructor for every result. Compile and write both remain in the batch.
+  // The descriptions are identical, so this row identifies work that a shared
+  // form could reuse.
   const auto byte =
       Ttx::Data::Form::Schema::primitive(Ttx::Data::Form::Schema::Value::U8);
   const auto schema = Ttx::Data::Form::Schema::range(byte, 4, 1, 4, 1);

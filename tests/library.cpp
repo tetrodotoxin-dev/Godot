@@ -8,8 +8,9 @@
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/null_terminated.hpp"
 
-#include "images/image.hpp"
-#include "modules/library.hpp"
+#include "perimortem/system/library.hpp"
+
+#include "imaging/graph/image.hpp"
 #include "tests/echo.hpp"
 
 using namespace Godot;
@@ -37,33 +38,35 @@ static auto loaded(Core::View::Bytes path) -> Bool {
 
 void Tests::Library::check(
     Core::View::Bytes path,
-    const Images::Vocabulary& vocabulary) {
+    const Imaging::Graph::Vocabulary& vocabulary) {
   Memory::Allocator::Arena errors;
   require(
       !loaded(path),
       "Lifetime probe must begin with its module unloaded."_view);
   {
     auto& provider =
-        Images::Provider::open(path, vocabulary, errors)
+        Imaging::Graph::Provider::open(path, vocabulary, errors)
             .visit(
-                [](Images::Provider& provider) -> Images::Provider& {
-                  return provider;
-                },
-                [](Core::View::Bytes error) -> Images::Provider& {
+                [](Imaging::Graph::Provider& provider)
+                    -> Imaging::Graph::Provider& { return provider; },
+                [](Core::View::Bytes error) -> Imaging::Graph::Provider& {
                   Core::Diagnostics::Log::fatal(error);
                 });
     const U8 pixels[] = {0, 2, 3, 255};
     auto image =
-        Images::Image::create(provider, 1, 1, {pixels, 4}, errors)
+        Imaging::Graph::Image::create(provider, 1, 1, {pixels, 4}, errors)
             .visit(
-                [](Images::Image& image) { return Core::Data::take(image); },
-                [](Core::View::Bytes error) -> Images::Image {
+                [](Imaging::Graph::Image& image) {
+                  return Core::Data::take(image);
+                },
+                [](Core::View::Bytes error) -> Imaging::Graph::Image {
                   Core::Diagnostics::Log::fatal(error);
                 });
-    const auto operation = Images::Operation::unary<Echo>("echo"_view);
+    const auto operation = Imaging::Graph::Operation::unary<Echo>("echo"_view);
     auto binding = image.bind_operation(operation).visit(
-        [](Ttx::Semantic::Binding binding) { return binding; },
-        [](Ttx::Semantic::Binding::Failure) -> Ttx::Semantic::Binding {
+        [](Imaging::Graph::Invocation binding) { return binding; },
+        [](Ttx::Semantic::Negotiation::Binding::Failure)
+            -> Imaging::Graph::Invocation {
           Core::Diagnostics::Log::fatal(
               "Lifetime probe could not bind Echo."_view);
         });
@@ -73,23 +76,29 @@ void Tests::Library::check(
     // receiver. The final image release must run before closing that code.
     provider.release();
     require(loaded(path), "Image did not retain its executable module."_view);
-    binding.get<Echo>().apply().visit(
-        [](image_object result) { result.operations->release(result.source); },
-        [](Core::View::Bytes error) { Core::Diagnostics::Log::fatal(error); });
+    binding.invoke(nullptr, nullptr)
+        .visit(
+            [](image_object result) {
+              result.operations->release(result.source);
+            },
+            [](Core::View::Bytes error) {
+              Core::Diagnostics::Log::fatal(error);
+            });
   }
 
   require(
       !loaded(path),
       "Module remained loaded after its final owner ended."_view);
   {
-    auto library = Modules::Library::open(path, errors)
-                       .visit(
-                           [](Modules::Library& library) {
-                             return Core::Data::take(library);
-                           },
-                           [](Core::View::Bytes error) -> Modules::Library {
-                             Core::Diagnostics::Log::fatal(error);
-                           });
+    auto library =
+        Perimortem::System::Library::open(path, errors)
+            .visit(
+                [](Perimortem::System::Library& library) {
+                  return Core::Data::take(library);
+                },
+                [](Core::View::Bytes error) -> Perimortem::System::Library {
+                  Core::Diagnostics::Log::fatal(error);
+                });
     library.symbol("missing_test_entry"_view, errors)
         .visit(
             [](void*) { require(False, "Missing symbol was accepted."_view); },

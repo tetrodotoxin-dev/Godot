@@ -9,15 +9,21 @@ cc_binary(
     name = "mechanics",
     testonly = True,
     srcs = ["main.cpp"],
-    deps = ["//images", "//operations:standard"],
-    dynamic_deps = ["//:image_runtime"],
-    data = ["//providers/cpu:cpu_provider"] + select({
-        "//:cuda_enabled": ["//providers/cuda:cuda_provider"],
-        "//conditions:default": [],
-    }),
     # The repository uses run_in_cwd and publishes outputs under .bin.
-    args = [".bin/bin/$(rootpath //providers/cpu:cpu_provider)"] + select({
-        "//:cuda_enabled": [".bin/bin/$(rootpath //providers/cuda:cuda_provider)"],
+    args = [".bin/bin/$(rootpath //plugins/cpu:cpu_provider)"] + select({
+        "//:cuda_enabled": [".bin/bin/$(rootpath //plugins/cuda:cuda_provider)"],
         "//conditions:default": [],
     }),
+    data = ["//plugins/cpu:cpu_provider"] + select({
+        "//:cuda_enabled": ["//plugins/cuda:cuda_provider"],
+        "//conditions:default": [],
+    }),
+    dynamic_deps = [
+        "//:support",
+        "@tetrodotoxin//ttx:runtime",
+    ],
+    deps = [
+        "//imaging/graph",
+        "//imaging/operations",
+    ],
 )

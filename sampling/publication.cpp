@@ -6,40 +6,28 @@
 using namespace Godot;
 using namespace Perimortem;
 
-auto Sampling::Publication::get_provider() const -> sample_provider {
+auto Sampling::Publication::get_publication() const -> ttx_publication {
   return {
     {this,
      [](const void* source, perimortem_uuid id,
-        ttx_binding* output) -> ttx_binding_status {
-       if (System::Uuid(id) != Ttx::Semantic::Thunk::contract_id) {
+        ttx_storage requested) -> ttx_binding_status {
+       if (System::Uuid(id) != Sampling::Contracts::Samples::contract_id) {
          return TTX_BINDING_UNSUPPORTED;
        }
-
-       static const ttx_thunk_operations operations = {
-         [](const void* source, perimortem_uuid id,
-            ttx_calling_convention convention,
-            const ttx_representation* representation,
-            ttx_binding* output) -> ttx_binding_status {
-           if (System::Uuid(id) != Contracts::Samples::contract_id ||
-               convention != TTX_CALLING_SYSTEM_V_AMD64) {
-             return TTX_BINDING_UNSUPPORTED;
-           }
-
-           if (!Contracts::Samples::get_representation().compatible(
-                   *representation)) {
-             return TTX_BINDING_REJECTED;
-           }
-
-           *output = static_cast<const Publication*>(source)->binding.get_abi();
-           return TTX_BINDING_SATISFIED;
-         },
-       };
-       *output = {source, &operations};
-       return TTX_BINDING_SATISFIED;
+       return static_cast<ttx_binding_status>(
+           Ttx::Semantic::Negotiation::Binding::provide<
+               Sampling::Contracts::Samples>(
+               static_cast<const Publication*>(source)->binding,
+               Ttx::Data::Form::Storage(requested)));
+     },
+     [](const void*, perimortem_uuid id) -> ttx_binding_status {
+       return System::Uuid(id) == Sampling::Contracts::Samples::contract_id
+                  ? TTX_BINDING_SATISFIED
+                  : TTX_BINDING_UNSUPPORTED;
      }},
     [](const void* source) {
       const auto& publication = *static_cast<const Publication*>(source);
-      publication.release(publication.binding.get_abi().source);
+      publication.release(publication.binding.source);
     },
   };
 }

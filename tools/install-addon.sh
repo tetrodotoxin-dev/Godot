@@ -25,7 +25,9 @@ while IFS= read -r -d '' file; do
     mkdir -p -- "$(dirname -- "$addon_root/$relative")"
     mv -f -- "$file" "$addon_root/$relative"
 done < <(rg --files --hidden --null "$staging")
-if ! tar -tf "$archive" | rg -q '^libcuda_provider.so$'; then
-    rm -f -- "$addon_root/libcuda_provider.so"
-fi
+for library in libcuda_provider.so libttx_cuda.so; do
+    if ! tar -tf "$archive" | rg -Fxq "$library"; then
+        rm -f -- "$addon_root/$library"
+    fi
+done
 printf 'Installed Bazel addon in %s\n' "$addon_root"

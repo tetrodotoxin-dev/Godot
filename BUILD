@@ -6,59 +6,83 @@ load("@rules_cc//cc:cc_shared_library.bzl", "cc_shared_library")
 
 package(default_visibility = ["//visibility:public"])
 
-config_setting(name = "cuda_enabled", define_values = {"godot_cuda": "1"})
+config_setting(
+    name = "cuda_enabled",
+    define_values = {"godot_cuda": "1"},
+)
 
-# A shared Perimortem runtime retains allocation ownership across native modules.
-# The providers share protocol support, but neither links the host image graph,
-# Godot bindings, or the other backend's implementation.
 cc_shared_library(
-    name = "image_runtime",
-    deps = [
-        "//contracts",
-        "//providers:support",
-        "//sampling:publication",
-        "@tetrodotoxin//ttx:semantic",
-        "@tetrodotoxin//ttx:data",
-        "@tetrodotoxin//perimortem:abi",
-        "@tetrodotoxin//perimortem:core",
-        "@tetrodotoxin//perimortem:memory",
-        "@tetrodotoxin//perimortem:system",
-        "@tetrodotoxin//perimortem:serialization",
-        "@tetrodotoxin//perimortem:compression",
-        "@tetrodotoxin//perimortem:graphics",
+    name = "support",
+    dynamic_deps = ["@tetrodotoxin//ttx:runtime"],
+    shared_lib_name = "liblab_support.so",
+    user_link_flags = [
+        "-Wl,-z,defs",
+        "-Wl,-rpath,$ORIGIN",
     ],
-    user_link_flags = ["-Wl,-z,defs"],
+    deps = [
+        "//gdextension/contracts",
+        "//imaging/contracts",
+        "//imaging/publication",
+        "//plugins/render",
+        "//sampling:publication",
+        "//sampling/contracts",
+    ],
 )
 
 cc_binary(
     name = "libgodot_ttx.so",
-    srcs = glob(["extension/**/*.cpp", "extension/**/*.hpp"]),
-    copts = ["-fvisibility=hidden", "-frtti"],
-    deps = ["//images", "//sampling:function", "//operations:standard", "//providers/gdscript", "@godot_cpp//:godot_cpp"],
-    dynamic_deps = [":image_runtime"],
-    linkopts = ["-Wl,-z,defs", "-Wl,-rpath,$ORIGIN"],
+    srcs = ["addon/register.cpp"],
+    copts = [
+        "-fvisibility=hidden",
+        "-frtti",
+    ],
+    dynamic_deps = [
+        ":support",
+        "@tetrodotoxin//ttx:runtime",
+    ],
+    linkopts = [
+        "-Wl,-z,defs",
+        "-Wl,-rpath,$ORIGIN",
+    ],
     linkshared = True,
     linkstatic = True,
+    deps = [
+        "//adapters:cuda",
+        "//adapters:imaging",
+        "//gdextension",
+        "@godot_cpp",
+    ],
 )
 
 filegroup(
     name = "addon_payload",
     srcs = [
+        "addon/godot_ttx.gdextension",
         ":libgodot_ttx.so",
-        ":image_runtime",
-        "//providers/cpu:cpu_provider",
-        "godot_ttx.gdextension",
+        ":support",
+        "//extensions/counter:counter_extension",
+        "//extensions/sampling:sampler_extension",
+        "//plugins/cpu:cpu_provider",
         "//tests:godot_check.gd",
+        "@tetrodotoxin//ttx:runtime",
     ] + select({
-        ":cuda_enabled": ["//providers/cuda:cuda_provider"],
+        ":cuda_enabled": [
+            "//plugins/cuda:cuda_provider",
+            "@ttx_cuda//cuda:plugin",
+        ],
         "//conditions:default": [],
     }),
 )
 
 genrule(
     name = "addon",
-    srcs = [":addon_payload", "//providers/gdscript:scripts"],
+    srcs = [
+        ":addon_payload",
+        "//adapters:scripts",
+        "//adapters:scene",
+    ],
     outs = ["godot_ttx.tar"],
     cmd = "tar -chf $@ --transform='s|.*/||' $(locations :addon_payload) && " +
-          "tar -rhf $@ --transform='s|^providers/||' $(locations //providers/gdscript:scripts)",
+          "tar -rhf $@ --transform='s|^adapters/imaging/scripts/|gdscript/|' $(locations //adapters:scripts) && " +
+          "tar -rhf $@ --transform='s|^adapters/imaging/||' $(locations //adapters:scene)",
 )

@@ -52,13 +52,6 @@ func _measure(results: Array[Dictionary], width: int, height: int,
     var reference := PackedByteArray()
 
     for backend in implementations:
-        var spatial_work := width * height * kernel_size * kernel_size
-        if backend.begins_with("gdscript") and spatial_work > 2000000:
-            results.append({"backend": backend, "operation": operation,
-                "width": width, "height": height, "kernel": kernel_size,
-                "skipped": "Spatial convolution exceeds this benchmark's script workload limit"})
-            continue
-
         # Setup is outside the timer. Direct GDScript calls and calls through
         # TTX execute the same script algorithm on equal publications. Native
         # convolution uses FFTW/cuFFT, so that row compares algorithm choices.
@@ -73,6 +66,16 @@ func _measure(results: Array[Dictionary], width: int, height: int,
                 failed = true
                 return
             source = image
+
+        var requested := operation
+        if backend == "gdscript_direct":
+            requested = source.CONVOLVE if operation == "convolve" else source.INVERT
+        var admission: Dictionary = source.admit(requested, kernel_size, kernel_size)
+        if admission.status != 0:
+            results.append({"backend": backend, "operation": operation,
+                "width": width, "height": height, "kernel": kernel_size,
+                "skipped": admission.reason})
+            continue
 
         var warmups := 3 if backend in ["cpu", "cuda"] else 1
         var result: RefCounted

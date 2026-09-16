@@ -2,21 +2,32 @@
 # Copyright (c) 2023-present Matt Kaes and contributors
 
 module(name = "godot")
+
 bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "perimortem", version = "0.0.1", repo_name = "tetrodotoxin")
-local_path_override(module_name = "perimortem", path = "../tetrodotoxin")
+local_path_override(
+    module_name = "perimortem",
+    path = "../tetrodotoxin",
+)
+
+bazel_dep(name = "ttx_cuda", version = "0.0.1")
+local_path_override(
+    module_name = "ttx_cuda",
+    path = "../cuda",
+)
+
 register_toolchains("@tetrodotoxin//toolchain:cc_toolchain_for_linux_x86_64")
 
-godot_cpp_repository = use_repo_rule("//third_party:repositories.bzl", "godot_cpp_repository")
+godot_cpp_repository = use_repo_rule("//gdextension/build:sdk.bzl", "godot_cpp_repository")
+
 godot_cpp_repository(
     name = "godot_cpp",
-    generator = "//third_party:generate_godot.py",
-    profile = "//third_party:build_profile.json",
-    build_file = "//third_party:godot_cpp.BUILD.bazel",
+    build_file = "//gdextension/build:godot_cpp.BUILD.bazel",
+    generator = "//gdextension/build:generate.py",
+    profile = "//gdextension/build:profile.json",
 )
-cuda_repository = use_repo_rule("//third_party:repositories.bzl", "cuda_repository")
-cuda_repository(name = "cuda_sdk")
 
-fftw_repository = use_repo_rule("//third_party:repositories.bzl", "fftw_repository")
+fftw_repository = use_repo_rule("//imaging/cpu:sdk.bzl", "fftw_repository")
+
 fftw_repository(name = "fftw_sdk")

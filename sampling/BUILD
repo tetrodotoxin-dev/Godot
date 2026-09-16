@@ -8,13 +8,16 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "publication",
     srcs = ["publication.cpp"],
-    hdrs = ["provider.h", "publication.hpp"],
-    deps = ["//contracts"],
+    hdrs = ["publication.hpp"],
+    deps = ["//sampling/contracts"],
 )
 
 cc_library(
     name = "function",
     srcs = ["function.cpp"],
     hdrs = ["function.hpp"],
-    deps = [":publication", "//modules"],
+    deps = [
+        ":publication",
+        "@tetrodotoxin//ttx:concept",
+    ],
 )

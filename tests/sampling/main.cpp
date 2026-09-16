@@ -12,8 +12,10 @@
 
 #include "perimortem/memory/dynamic/bytes.hpp"
 
+#include "perimortem/system/library.hpp"
+
 #include "sampling/function.hpp"
-#include "ttx/semantic/simulacra.hpp"
+#include "ttx/semantic/realization/simulacra.hpp"
 
 using namespace Godot;
 using namespace Perimortem;
@@ -47,10 +49,10 @@ static auto loaded(Core::View::Bytes path) -> Bool {
   return True;
 }
 
-// Hard-coded answers were calculated independently from the integer contract.
+// Expected answers were calculated independently from the integer contract.
 // They include a tail interval that ends exactly at 2^32, where a U32 loop
 // cursor could otherwise wrap and never terminate.
-static void answers(Contracts::Samples::Handle function) {
+static void answers(Sampling::Contracts::Samples function) {
   require(
       accepted(function.count(0, 0, 1)) == 1, "Origin sample differs."_view);
   require(
@@ -81,72 +83,54 @@ static void answers(Contracts::Samples::Handle function) {
 // opaque.
 static void boundary(Core::View::Bytes path) {
   Memory::Allocator::Arena errors;
-  auto library = accepted(Modules::Library::open(path, errors));
-  auto address =
-      accepted(library.symbol("godot_sample_provider_open_v1"_view, errors));
-  const auto open = reinterpret_cast<sample_provider_open>(address);
-  sample_provider provider = {};
+  auto library = accepted(Perimortem::System::Library::open(path, errors));
+  auto address = accepted(library.symbol("ttx_module_open"_view, errors));
+  const auto open = reinterpret_cast<ttx_module_entry>(address);
+  ttx_module_acquisition provider = {};
   require(
-      open(&provider) == TTX_DATA_SUCCESS,
+      open(ttx_semantic_query{}, &provider) == TTX_DATA_SUCCESS,
       "Could not open C publication."_view);
-  const Ttx::Semantic::Query query(provider.query);
+  const auto query = Ttx::Concept::Abstract(provider.root).get_query();
+  using Samples = Sampling::Contracts::Samples;
+  using Ttx::Semantic::Negotiation::Binding::Status;
+  Samples::Api binding = {};
+  const auto& form = Samples::get_representation();
+  const Ttx::Data::Form::Storage target(
+      ttx_storage{&form, reinterpret_cast<U8*>(&binding), sizeof(binding)});
   require(
-      query.bind(System::Uuid(1, 2))
-          .visit(
-              [](const Ttx::Semantic::Binding&) { return False; },
-              [](Ttx::Semantic::Binding::Failure failure) -> Bool {
-                return failure == Ttx::Semantic::Binding::Failure::Unsupported;
-              }),
-      "Unknown contract was accepted."_view);
+      query.bind(System::Uuid(1, 2), target) == Status::Unsupported,
+      "Matching API geometry admitted the wrong contract."_view);
 
-  using Samples = Contracts::Samples;
-  const auto protocol = accepted(query.bind<Ttx::Semantic::Thunk>());
-  require(
-      protocol
-          .fulfill(
-              System::Uuid(1, 2), Samples::convention,
-              Samples::get_representation())
-          .visit(
-              [](const Ttx::Semantic::Binding&) { return False; },
-              [](Ttx::Semantic::Binding::Failure failure) -> Bool {
-                return failure == Ttx::Semantic::Binding::Failure::Unsupported;
-              }),
-      "Matching table geometry admitted the wrong callable."_view);
   using Ttx::Data::Form::Schema;
   static constexpr auto byte = Schema::primitive(Schema::Value::U8);
   const auto& wrong_form =
       Ttx::Data::Form::Compiled<byte>::get_representation();
+  U8 untouched = 123;
+  const Ttx::Data::Form::Storage wrong(ttx_storage{&wrong_form, &untouched, 1});
   require(
-      protocol.fulfill(Samples::contract_id, Samples::convention, wrong_form)
-          .visit(
-              [](const Ttx::Semantic::Binding&) { return False; },
-              [](Ttx::Semantic::Binding::Failure failure) -> Bool {
-                return failure == Ttx::Semantic::Binding::Failure::Rejected;
-              }),
-      "Incompatible callable table was accepted."_view);
+      query.bind(Samples::contract_id, wrong) == Status::Rejected &&
+          untouched == 123,
+      "Incompatible API storage was accepted or modified."_view);
+  require(
+      query.bind(Samples::contract_id, target) == Status::Satisfied,
+      "C callable record did not agree."_view);
 
-  const auto binding = accepted(
-                           Ttx::Semantic::Simulacra::fulfill(
-                               query, Samples::contract_id, Samples::convention,
-                               Samples::get_representation()))
-                           .get_abi();
   U64 output = 123;
-  const auto& table =
-      *static_cast<const sample_operations*>(binding.operations);
+  const auto& table = *binding.operations;
   require(
       table.count(binding.source, 0, 0xffffffff, 2, &output) ==
               TTX_DATA_BOUNDS &&
           output == 123,
       "Failed call published an output."_view);
-  provider.release(provider.query.source);
+  provider.release(provider.owner);
 }
 
 // Same interval, different placement. This deliberately executes synchronously
 // on one host worker. It proves partitioning and recombination across modules,
 // not a network scheduler or overlapping CPU/GPU execution.
 static void partition(
-    Contracts::Samples::Handle left,
-    Contracts::Samples::Handle right) {
+    Sampling::Contracts::Samples left,
+    Sampling::Contracts::Samples right) {
   constexpr U32 seed = 73;
   constexpr U32 first = 109;
   constexpr U32 count = 65539;
@@ -162,7 +146,7 @@ static void partition(
 
 static void measure(
     Core::View::Bytes backend,
-    Contracts::Samples::Handle function,
+    Sampling::Contracts::Samples function,
     U32 size,
     Count iterations) {
   const auto expected = accepted(function.count(13, 0, size));

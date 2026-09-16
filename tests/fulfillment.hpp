@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "images/vocabulary.hpp"
+#include "imaging/graph/vocabulary.hpp"
 
 namespace Godot::Tests {
 
@@ -14,7 +14,7 @@ class Fulfillment {
  public:
   static void check(
       Perimortem::Core::View::Bytes module,
-      const Images::Vocabulary& vocabulary);
+      const Imaging::Graph::Vocabulary& vocabulary);
 };
 
 }  // namespace Godot::Tests

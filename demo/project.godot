@@ -16,4 +16,19 @@ window/stretch/mode="canvas_items"
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.047, 0.063, 0.094, 1)
+environment/defaults/default_clear_color=Color(0.043137, 0.043137, 0.058824, 1)
+
+[ttx]
+cuda_compiler="compiler"
+imports={
+"compiler": "res://addons/godot_ttx/libttx_cuda.so",
+"counter": "res://addons/godot_ttx/libcounter_extension.so",
+"sampler": "res://addons/godot_ttx/libsampler_extension.so",
+"cpu": "res://addons/godot_ttx/libcpu_provider.so",
+"cuda": "res://addons/godot_ttx/libcuda_provider.so"
+}
+classes=[{
+"module": "counter", "export": "Counter", "name": "TtxCounter", "base": "Node"
+}, {
+"module": "sampler", "export": "Sampler", "name": "TtxSampler", "base": "RefCounted"
+}]

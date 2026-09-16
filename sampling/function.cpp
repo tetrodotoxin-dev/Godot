@@ -5,90 +5,57 @@
 
 #include "perimortem/core/null_terminated.hpp"
 
-#include "ttx/semantic/simulacra.hpp"
+#include "ttx/semantic/realization/simulacra.hpp"
 
 using namespace Godot;
 using namespace Perimortem;
 
 Sampling::Function::Function(
-    Modules::Library&& library,
-    sample_provider provider,
-    Contracts::Samples::Handle handle)
-    : library(Core::Data::take(library)), provider(provider), handle(handle) {}
+    Ttx::Concept::Modules::Module module,
+    Ttx::Concept::Modules::Module::Acquisition publication,
+    Sampling::Contracts::Samples handle)
+    : module(Core::Data::take(module)),
+      publication(Core::Data::take(publication)),
+      handle(handle) {}
 
 Sampling::Function::Function(Function&& other)
-    : library(Core::Data::take(other.library)),
-      provider(other.provider),
-      handle(other.handle) {
-  other.provider.release = nullptr;
-}
+    : module(Core::Data::take(other.module)),
+      publication(Core::Data::take(other.publication)),
+      handle(other.handle) {}
 
-Sampling::Function::~Function() {
-  if (provider.release) {
-    provider.release(provider.query.source);
-  }
-}
-
-auto Sampling::Function::admit(
-    Modules::Library&& library,
-    sample_provider provider) -> Utility::Result<Function, Core::View::Bytes> {
-  return Ttx::Semantic::Simulacra::fulfill<Contracts::Samples>(
-             Ttx::Semantic::Query(provider.query))
-      .visit(
-          [&](const Contracts::Samples::Handle& handle)
-              -> Utility::Result<Function, Core::View::Bytes> {
-            return Function(Core::Data::take(library), provider, handle);
-          },
-          [&](Ttx::Semantic::Binding::Failure)
-              -> Utility::Result<Function, Core::View::Bytes> {
-            provider.release(provider.query.source);
-            return "Sampling provider could not fulfill the callable."_view;
-          });
-}
-
-static auto load(
-    const Modules::Library& library,
-    Memory::Allocator::Arena& errors)
-    -> Utility::Result<sample_provider, Core::View::Bytes> {
-  return library.symbol("godot_sample_provider_open_v1"_view, errors)
-      .visit(
-          [](void* address)
-              -> Utility::Result<sample_provider, Core::View::Bytes> {
-            const auto open = reinterpret_cast<sample_provider_open>(address);
-            sample_provider provider = {};
-            if (open(&provider) != TTX_DATA_SUCCESS) {
-              return "Sampling provider could not initialize."_view;
-            }
-
-            return provider;
-          },
-          [](Core::View::Bytes error)
-              -> Utility::Result<sample_provider, Core::View::Bytes> {
-            return error;
-          });
+auto Sampling::Function::open(
+    Ttx::Concept::Modules::Module module,
+    Ttx::Semantic::Negotiation::Query host)
+    -> Utility::Result<Function, Core::View::Bytes> {
+  using Result = Utility::Result<Function, Core::View::Bytes>;
+  return module.open(host).visit(
+      [&](Ttx::Concept::Modules::Module::Acquisition& publication) -> Result {
+        return Ttx::Semantic::Realization::Simulacra::fulfill<
+                   Sampling::Contracts::Samples>(publication.get_query())
+            .visit(
+                [&](Sampling::Contracts::Samples handle) -> Result {
+                  return Function(
+                      Core::Data::take(module), Core::Data::take(publication),
+                      handle);
+                },
+                [](Ttx::Semantic::Negotiation::Binding::Failure) -> Result {
+                  return "Sampling module did not fulfill the callable."_view;
+                });
+      },
+      [](Ttx::Data::Status) -> Result {
+        return "Sampling module could not initialize."_view;
+      });
 }
 
 auto Sampling::Function::open(
     Core::View::Bytes path,
     Memory::Allocator::Arena& errors)
     -> Utility::Result<Function, Core::View::Bytes> {
-  return Modules::Library::open(path, errors)
+  using Result = Utility::Result<Function, Core::View::Bytes>;
+  return Ttx::Concept::Modules::Module::load(path, errors)
       .visit(
-          [&](Modules::Library& library)
-              -> Utility::Result<Function, Core::View::Bytes> {
-            return load(library, errors)
-                .visit(
-                    [&](sample_provider provider)
-                        -> Utility::Result<Function, Core::View::Bytes> {
-                      return admit(Core::Data::take(library), provider);
-                    },
-                    [](Core::View::Bytes error)
-                        -> Utility::Result<Function, Core::View::Bytes> {
-                      return error;
-                    });
+          [](Ttx::Concept::Modules::Module& module) -> Result {
+            return open(Core::Data::take(module));
           },
-          [](Core::View::Bytes error)
-              -> Utility::Result<Function, Core::View::Bytes> {
-            return error;
-          });
+          [](Core::View::Bytes error) -> Result { return error; });
 }

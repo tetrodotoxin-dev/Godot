@@ -19,6 +19,16 @@ class Publication extends ScriptImage:
     var bindings := 0
     var composites := 0
 
+    func supports(contract: String) -> int:
+        match mode:
+            "unsupported":
+                return UNSUPPORTED
+            "pending":
+                return PENDING
+            "rejected":
+                return REJECTED
+        return super.supports(contract)
+
     func fulfill(contract: String) -> Variant:
         bindings += 1
         if mode == "bind_reentry":
@@ -80,8 +90,17 @@ class Delegation extends RefCounted:
     func _init(image: RefCounted) -> void:
         implementation = image
 
+    func supports(contract: String) -> int:
+        return implementation.supports(contract)
+
     func fulfill(contract: String) -> Variant:
         return implementation.fulfill(contract)
+
+    func offers() -> Array:
+        return implementation.offers()
+
+    func admit(contract: String, width: int = 0, height: int = 0) -> Dictionary:
+        return implementation.admit(contract, width, height)
 
     func read_pixels() -> PackedByteArray:
         return implementation.read_pixels()

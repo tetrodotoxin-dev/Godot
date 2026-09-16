@@ -3,42 +3,40 @@
 
 #pragma once
 
-#include "contracts/samples.hpp"
-#include "modules/library.hpp"
-#include "sampling/provider.h"
+#include "sampling/contracts/samples.hpp"
+#include "ttx/concept/modules/module.hpp"
 
 namespace Godot::Sampling {
 
-// A sampling function retains the supplying module and publication once, then
-// lends its already fulfilled callable. Both remain valid across every count.
-// Releasing provider state before the Library closes keeps its destruction code
-// available. The function is worker confined, including its final destruction.
+// Function retains one module and runtime publication beside its fulfilled
+// Samples binding. An injected importer can supply the module, while a native
+// command line owner can load a path directly. Neither choice enters the hot
+// count operation, and publication release always precedes code release.
 class Function {
  public:
   static auto open(
       Perimortem::Core::View::Bytes path,
       Perimortem::Memory::Allocator::Arena& errors)
       -> Perimortem::Utility::Result<Function, Perimortem::Core::View::Bytes>;
+  static auto open(
+      Ttx::Concept::Modules::Module module,
+      Ttx::Semantic::Negotiation::Query host =
+          Ttx::Semantic::Negotiation::Query())
+      -> Perimortem::Utility::Result<Function, Perimortem::Core::View::Bytes>;
   Function(Function&& other);
   Function(const Function&) = delete;
   auto operator=(const Function&) -> Function& = delete;
-  ~Function();
-  auto get_handle() const -> Contracts::Samples::Handle { return handle; }
+  ~Function() = default;
+  auto get_handle() const -> Sampling::Contracts::Samples { return handle; }
 
  private:
-  // Admission must either construct this private lifetime owner or release the
-  // transferred publication. Keeping that step here makes the obligation
-  // visible without exposing a constructor for an unfulfilled function.
-  static auto admit(Modules::Library&& library, sample_provider provider)
-      -> Perimortem::Utility::Result<Function, Perimortem::Core::View::Bytes>;
-
   Function(
-      Modules::Library&& library,
-      sample_provider provider,
-      Contracts::Samples::Handle handle);
-  Modules::Library library;
-  sample_provider provider;
-  Contracts::Samples::Handle handle;
+      Ttx::Concept::Modules::Module module,
+      Ttx::Concept::Modules::Module::Acquisition publication,
+      Sampling::Contracts::Samples handle);
+  Ttx::Concept::Modules::Module module;
+  Ttx::Concept::Modules::Module::Acquisition publication;
+  Sampling::Contracts::Samples handle;
 };
 
 }  // namespace Godot::Sampling

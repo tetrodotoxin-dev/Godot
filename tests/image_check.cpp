@@ -9,17 +9,17 @@
 #include "perimortem/core/time.hpp"
 #include "perimortem/core/writer/textual.hpp"
 
-#include "contracts/invert.hpp"
-#include "images/call.hpp"
-#include "images/image.hpp"
-#include "images/kernel.hpp"
-#include "images/source.hpp"
-#include "images/vocabulary.hpp"
-#include "operations/standard.hpp"
+#include "imaging/contracts/invert.hpp"
+#include "imaging/graph/call.hpp"
+#include "imaging/graph/image.hpp"
+#include "imaging/graph/kernel.hpp"
+#include "imaging/graph/source.hpp"
+#include "imaging/graph/vocabulary.hpp"
+#include "imaging/operations/standard.hpp"
 #include "tests/forms.hpp"
 #include "tests/fulfillment.hpp"
 #include "tests/library.hpp"
-#include "ttx/semantic/simulacra.hpp"
+#include "ttx/semantic/realization/simulacra.hpp"
 
 using namespace Godot;
 using namespace Perimortem;
@@ -44,24 +44,27 @@ static auto accepted(Utility::Result<Value, Core::View::Bytes> result)
       });
 }
 
-static auto definition(const Images::Image& image, Core::View::Bytes name)
-    -> const Images::Operation& {
+static auto definition(
+    const Imaging::Graph::Image& image,
+    Core::View::Bytes name) -> const Imaging::Graph::Operation& {
   const auto* operation = image.get_provider().get_vocabulary().find(name);
   require(operation != nullptr, "Missing operation publication"_view);
   return *operation;
 }
 
-static auto invert(const Images::Image& image, Memory::Allocator::Arena& errors)
-    -> Utility::Result<Images::Image, Core::View::Bytes> {
+static auto invert(
+    const Imaging::Graph::Image& image,
+    Memory::Allocator::Arena& errors)
+    -> Utility::Result<Imaging::Graph::Image, Core::View::Bytes> {
   return image.apply(
       definition(image, "invert"_view), nullptr, nullptr, errors);
 }
 
 static auto convolve(
-    const Images::Image& image,
-    const Images::Kernel& kernel,
+    const Imaging::Graph::Image& image,
+    const Imaging::Graph::Kernel& kernel,
     Memory::Allocator::Arena& errors)
-    -> Utility::Result<Images::Image, Core::View::Bytes> {
+    -> Utility::Result<Imaging::Graph::Image, Core::View::Bytes> {
   return image.apply(
       definition(image, "convolve"_view), &kernel, nullptr, errors);
 }
@@ -141,7 +144,7 @@ static auto spatial(
   return output;
 }
 
-static void small(Images::Image image, Core::View::Bytes original) {
+static void small(Imaging::Graph::Image image, Core::View::Bytes original) {
   Memory::Allocator::Arena errors;
   require(
       image.get_width() == 19 && image.get_height() == 11,
@@ -167,7 +170,7 @@ static void small(Images::Image image, Core::View::Bytes original) {
       "Source was mutated"_view);
   const R32 weights[] = {0.03f, 0.07f, 0.12f, -0.02f, 0.33f,
                          0.09f, 0.14f, 0.04f, 0.2f};
-  const Images::Kernel kernel(3, 3, {weights, 9});
+  const Imaging::Graph::Kernel kernel(3, 3, {weights, 9});
   const auto expected = spatial(original, 19, 11, {weights, 9}, 3, 3);
   auto filtered = accepted(convolve(image, kernel, errors));
   require(
@@ -177,26 +180,27 @@ static void small(Images::Image image, Core::View::Bytes original) {
   // replaces its source. Neither can depend on the old host resource's address.
   auto retained = image;
   image = accepted(
-      Images::Image::create(image.get_provider(), 1, 1, "rgba"_view, errors));
+      Imaging::Graph::Image::create(
+          image.get_provider(), 1, 1, "rgba"_view, errors));
   require(
       difference(accepted(filtered.read_pixels(errors)), expected) <= 1,
       "Derived image lost its supplying storage"_view);
   require(
       accepted(retained.read_pixels(errors)).get_view() == original,
       "Retained source did not survive replacement"_view);
-  const Images::Kernel malformed(2, 2, {weights, 4});
+  const Imaging::Graph::Kernel malformed(2, 2, {weights, 4});
   auto rejected = convolve(retained, malformed, errors);
   require(
       rejected.visit(
-          [](Images::Image&) { return false; },
+          [](Imaging::Graph::Image&) { return false; },
           [](Core::View::Bytes error) { return bool(!error.is_empty()); }),
       "Even kernel was accepted"_view);
   const R32 nonfinite[] = {__builtin_nanf("")};
-  const Images::Kernel invalid(1, 1, {nonfinite, 1});
+  const Imaging::Graph::Kernel invalid(1, 1, {nonfinite, 1});
   auto failed = convolve(retained, invalid, errors);
   require(
       failed.visit(
-          [](Images::Image&) { return false; },
+          [](Imaging::Graph::Image&) { return false; },
           [](Core::View::Bytes error) { return bool(!error.is_empty()); }),
       "Nonfinite kernel was accepted"_view);
 }
@@ -223,13 +227,13 @@ static auto disk(U32 size) -> Memory::Dynamic::Bytes {
 }
 
 static auto benchmark(
-    Images::Image& image,
-    const Images::Kernel& kernel,
+    Imaging::Graph::Image& image,
+    const Imaging::Graph::Kernel& kernel,
     Core::View::Bytes label) -> Memory::Dynamic::Bytes {
   Memory::Allocator::Arena errors;
   auto warm = accepted(convolve(image, kernel, errors));
   R64 elapsed = 0;
-  Core::Option<Images::Image> output;
+  Core::Option<Imaging::Graph::Image> output;
   for (U32 i = 0; i < 3; ++i) {
     const auto started = Core::Time::now();
     output = accepted(convolve(image, kernel, errors));
@@ -273,19 +277,21 @@ static auto source_over(Core::View::Bytes background, Core::View::Bytes overlay)
 }
 
 static auto current(
-    Images::Expression& expression,
-    Memory::Allocator::Arena& errors) -> const Images::Image& {
+    Imaging::Graph::Expression& expression,
+    Memory::Allocator::Arena& errors) -> const Imaging::Graph::Image& {
   auto result = expression.evaluate(errors);
   return result.visit(
-      [](const Images::Image& image) -> const Images::Image& { return image; },
-      [](Core::View::Bytes error) -> const Images::Image& {
+      [](const Imaging::Graph::Image& image) -> const Imaging::Graph::Image& {
+        return image;
+      },
+      [](Core::View::Bytes error) -> const Imaging::Graph::Image& {
         Core::Diagnostics::Log::fatal(error);
       });
 }
 
 static void composition(
-    Images::Provider& background_provider,
-    Images::Provider& overlay_provider,
+    Imaging::Graph::Provider& background_provider,
+    Imaging::Graph::Provider& overlay_provider,
     bool gpu) {
   Memory::Allocator::Arena errors;
   const auto& contract = background_provider.get_vocabulary();
@@ -298,27 +304,31 @@ static void composition(
   // Include the alpha endpoints as well as the generated fractional coverage.
   overlay.get_access().get_data()[3] = 0;
   overlay.get_access().get_data()[7] = 255;
-  auto& base = Images::Source::create(accepted(
-      Images::Image::create(background_provider, 19, 11, background, errors)));
-  auto& front = Images::Source::create(accepted(
-      Images::Image::create(overlay_provider, 19, 11, overlay, errors)));
+  auto& base = Imaging::Graph::Source::create(accepted(
+      Imaging::Graph::Image::create(
+          background_provider, 19, 11, background, errors)));
+  auto& front = Imaging::Graph::Source::create(accepted(
+      Imaging::Graph::Image::create(
+          overlay_provider, 19, 11, overlay, errors)));
   const R32 weights[] = {0.03f, 0.07f, 0.12f, -0.02f, 0.33f,
                          0.09f, 0.14f, 0.04f, 0.2f};
   Memory::Allocator::Arena constants;
   const auto stored =
       constants.proxy({reinterpret_cast<const U8*>(weights), sizeof(weights)});
-  const auto& kernel = constants.construct<Images::Kernel>(
+  const auto& kernel = constants.construct<Imaging::Graph::Kernel>(
       3, 3,
       Core::View::Vector<R32>(
           reinterpret_cast<const R32*>(stored.get_data()), 9));
-  const Images::Call::Argument filter_arguments[] = {{nullptr, &kernel}};
+  const Imaging::Graph::Call::Argument filter_arguments[] = {
+    {nullptr, &kernel}};
   const auto& filter = *contract.find("convolve"_view);
   const auto& blend = *contract.find("composite"_view);
-  auto& blur = Images::Call::create(
+  auto& blur = Imaging::Graph::Call::create(
       base, filter, filter_arguments, Core::Data::take(constants));
-  const Images::Call::Argument blend_arguments[] = {{&front, nullptr}};
-  auto& combined = Images::Call::create(blur, blend, blend_arguments, {});
-  Images::Image history = current(combined, errors);
+  const Imaging::Graph::Call::Argument blend_arguments[] = {{&front, nullptr}};
+  auto& combined =
+      Imaging::Graph::Call::create(blur, blend, blend_arguments, {});
+  Imaging::Graph::Image history = current(combined, errors);
   const auto original = accepted(history.read_pixels(errors));
   const auto blurred = accepted(current(blur, errors).read_pixels(errors));
   const auto blur_identity = current(blur, errors).get_abi();
@@ -326,18 +336,28 @@ static void composition(
       difference(original, source_over(blurred, overlay)) <= 1,
       "Source over disagrees with independent alpha oracle"_view);
   require(
-      combined.get_interface()
+      Ttx::Concept::Abstract::provide(combined)
               .resolve_concept("operation"_view)
-              .get_identity() == blend.get_interface().get_identity(),
+              .get_identity() ==
+          Ttx::Concept::Abstract::provide(blend).get_identity(),
       "Call lost its operation identity"_view);
   // Navigation lends the current image's policy. Fulfillment must reach its
   // provider through that bound edge, without selecting a native CPU/CUDA type
   // or causing a pixel transfer just to obtain the callable interface.
   const auto before_binding = background_provider.statistics();
-  const auto visible = combined.get_interface().resolve_concept("value"_view);
-  Ttx::Semantic::Simulacra::fulfill<Contracts::Invert>(visible.get_query())
+  const auto visible =
+      Ttx::Concept::Abstract::provide(combined).resolve_concept("value"_view);
+  require(
+      visible.supports<Imaging::Contracts::Invert>() ==
+          Ttx::Semantic::Negotiation::Binding::Status::Satisfied,
+      "Image support did not preserve the provider contract"_view);
+  require(
+      background_provider.statistics().downloads == before_binding.downloads,
+      "Inspecting image support downloaded pixels"_view);
+  Ttx::Semantic::Realization::Simulacra::fulfill<Imaging::Contracts::Invert>(
+      visible.get_query())
       .visit(
-          [&](const Contracts::Invert::Handle& handle) {
+          [&](const Imaging::Contracts::Invert& handle) {
             handle.apply().visit(
                 [](image_object native) {
                   native.operations->release(native.source);
@@ -347,7 +367,7 @@ static void composition(
                       False, "Navigated image could not invoke invert"_view);
                 });
           },
-          [&](Ttx::Semantic::Binding::Failure) {
+          [&](Ttx::Semantic::Negotiation::Binding::Failure) {
             require(False, "Navigated image lost its provider policy"_view);
           });
   require(
@@ -370,7 +390,8 @@ static void composition(
   }
 
   front.publish(accepted(
-      Images::Image::create(overlay_provider, 19, 11, overlay, errors)));
+      Imaging::Graph::Image::create(
+          overlay_provider, 19, 11, overlay, errors)));
   const auto before = background_provider.statistics();
   const auto& changed = current(combined, errors);
   const auto after = background_provider.statistics();
@@ -392,11 +413,12 @@ static void composition(
           source_over(blurred, overlay)) <= 1,
       "Changed overlay produced stale composition"_view);
   front.publish(accepted(
-      Images::Image::create(overlay_provider, 1, 1, "rgba"_view, errors)));
+      Imaging::Graph::Image::create(
+          overlay_provider, 1, 1, "rgba"_view, errors)));
   auto failure = combined.evaluate(errors);
   require(
       failure.visit(
-          [](const Images::Image&) { return false; },
+          [](const Imaging::Graph::Image&) { return false; },
           [](Core::View::Bytes error) { return bool(!error.is_empty()); }),
       "Mismatched composite dimensions were accepted"_view);
   combined.evaluate(errors);
@@ -404,14 +426,16 @@ static void composition(
       combined.get_evaluations() == 3 && blur.get_evaluations() == 1,
       "Failed evaluation was not cached independently"_view);
   front.publish(accepted(
-      Images::Image::create(overlay_provider, 19, 11, overlay, errors)));
+      Imaging::Graph::Image::create(
+          overlay_provider, 19, 11, overlay, errors)));
   require(
       difference(
           accepted(current(combined, errors).read_pixels(errors)),
           source_over(blurred, overlay)) <= 1,
       "Graph did not recover after corrected input"_view);
   base.publish(accepted(
-      Images::Image::create(background_provider, 19, 11, overlay, errors)));
+      Imaging::Graph::Image::create(
+          background_provider, 19, 11, overlay, errors)));
   current(combined, errors);
   require(
       blur.get_evaluations() == 2 && combined.get_evaluations() == 5,
@@ -428,16 +452,16 @@ static void composition(
           : "PASS: CPU composition, dependency propagation and retained history"_view);
 }
 
-static void shared_ancestors(Images::Provider& provider) {
+static void shared_ancestors(Imaging::Graph::Provider& provider) {
   Memory::Allocator::Arena errors;
-  Images::Expression* graph = &Images::Source::create(
-      accepted(Images::Image::create(provider, 1, 1, "1234"_view, errors)));
+  Imaging::Graph::Expression* graph = &Imaging::Graph::Source::create(accepted(
+      Imaging::Graph::Image::create(provider, 1, 1, "1234"_view, errors)));
   const auto& blend = *provider.get_vocabulary().find("composite"_view);
   // There are 33 nodes but exponentially many paths to the shared source.
   // A pull visits each node once instead of walking every possible path.
   for (U32 i = 0; i < 32; ++i) {
-    const Images::Call::Argument arguments[] = {{graph, nullptr}};
-    auto& next = Images::Call::create(*graph, blend, arguments);
+    const Imaging::Graph::Call::Argument arguments[] = {{graph, nullptr}};
+    auto& next = Imaging::Graph::Call::create(*graph, blend, arguments);
     graph->release();
     graph = &next;
   }
@@ -458,37 +482,38 @@ static int check(int argc, char** argv) {
   require(
       argc == 3 || argc == 4,
       "Supply CPU, probe, and optionally CUDA module paths."_view);
-  const auto& contract = Operations::Standard::get_vocabulary();
+  const auto& contract = Imaging::Operations::Standard::get_vocabulary();
   Memory::Allocator::Arena errors;
   auto& cpu_provider =
-      Images::Provider::open(
+      Imaging::Graph::Provider::open(
           Core::NullTerminated::to_view(argv[1]), contract, errors)
           .visit(
-              [](Images::Provider& value) -> Images::Provider& {
+              [](Imaging::Graph::Provider& value) -> Imaging::Graph::Provider& {
                 return value;
               },
-              [](Core::View::Bytes error) -> Images::Provider& {
+              [](Core::View::Bytes error) -> Imaging::Graph::Provider& {
                 Core::Diagnostics::Log::fatal(error);
               });
   const auto pixels = source(19, 11);
   small(
-      accepted(Images::Image::create(cpu_provider, 19, 11, pixels, errors)),
+      accepted(
+          Imaging::Graph::Image::create(cpu_provider, 19, 11, pixels, errors)),
       pixels);
   auto malformed =
-      Images::Image::create(cpu_provider, 1, 1, "abc"_view, errors);
+      Imaging::Graph::Image::create(cpu_provider, 1, 1, "abc"_view, errors);
   require(
       malformed.visit(
-          [](Images::Image&) { return false; },
+          [](Imaging::Graph::Image&) { return false; },
           [](Core::View::Bytes error) { return bool(!error.is_empty()); }),
       "Malformed source accepted"_view);
   const auto large = source(1024, 512);
   const auto coefficients = disk(63);
-  const Images::Kernel kernel(
+  const Imaging::Graph::Kernel kernel(
       63, 63,
       {reinterpret_cast<const R32*>(coefficients.get_view().get_data()),
        63 * 63});
-  auto cpu =
-      accepted(Images::Image::create(cpu_provider, 1024, 512, large, errors));
+  auto cpu = accepted(
+      Imaging::Graph::Image::create(cpu_provider, 1024, 512, large, errors));
   Tests::Forms::check(cpu_provider, False);
   composition(cpu_provider, cpu_provider, false);
   shared_ancestors(cpu_provider);
@@ -497,26 +522,26 @@ static int check(int argc, char** argv) {
   Tests::Library::check(Core::NullTerminated::to_view(argv[2]), contract);
   if (argc == 4) {
     auto& provider =
-        Images::Provider::open(
+        Imaging::Graph::Provider::open(
             Core::NullTerminated::to_view(argv[3]), contract, errors)
             .visit(
-                [](Images::Provider& value) -> Images::Provider& {
-                  return value;
-                },
-                [](Core::View::Bytes error) -> Images::Provider& {
+                [](Imaging::Graph::Provider& value)
+                    -> Imaging::Graph::Provider& { return value; },
+                [](Core::View::Bytes error) -> Imaging::Graph::Provider& {
                   Core::Diagnostics::Log::fatal(error);
                 });
     {
       Tests::Forms::check(provider, True);
       composition(provider, cpu_provider, true);
       small(
-          accepted(Images::Image::create(provider, 19, 11, pixels, errors)),
+          accepted(
+              Imaging::Graph::Image::create(provider, 19, 11, pixels, errors)),
           pixels);
       require(
           provider.statistics().live_images == 0,
           "CUDA images leaked after final handle release"_view);
-      auto cuda =
-          accepted(Images::Image::create(provider, 1024, 512, large, errors));
+      auto cuda = accepted(
+          Imaging::Graph::Image::create(provider, 1024, 512, large, errors));
       const auto before = provider.statistics();
       auto inverted = accepted(invert(cuda, errors));
       auto restored = accepted(invert(inverted, errors));
@@ -541,8 +566,8 @@ static int check(int argc, char** argv) {
     require(
         provider.statistics().live_images == 0,
         "CUDA image resources remain live"_view);
-    auto survivor =
-        accepted(Images::Image::create(provider, 19, 11, pixels, errors));
+    auto survivor = accepted(
+        Imaging::Graph::Image::create(provider, 19, 11, pixels, errors));
     provider.release();
     require(
         accepted(survivor.read_pixels(errors)).get_view() == pixels.get_view(),

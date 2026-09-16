@@ -1,20 +1,15 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://lab.gd" id="1"]
 [ext_resource type="Theme" path="res://theme.tres" id="2"]
 [ext_resource type="PackedScene" path="res://preview.tscn" id="3"]
+[ext_resource type="Script" path="res://addons/godot_ttx/scene/render.gd" id="4"]
+[ext_resource type="Script" path="res://addons/godot_ttx/scene/policy.gd" id="5"]
+[ext_resource type="Script" path="res://compute/provider_node.gd" id="6"]
 
-[sub_resource type="TtxImage" id="Cpu"]
-provider = "cpu"
+[sub_resource type="ImageTexture" id="Source"]
 
-[sub_resource type="TtxImage" id="Cuda"]
-provider = "cuda"
-
-[sub_resource type="TtxImage" id="Script"]
-provider = "gdscript"
-
-[sub_resource type="TtxImage" id="Overlay"]
-provider = "gdscript"
+[sub_resource type="ImageTexture" id="Overlay"]
 
 [node name="Lab" type="Control"]
 layout_mode = 3
@@ -25,10 +20,86 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("2")
 script = ExtResource("1")
-cpu_source = SubResource("Cpu")
-cuda_source = SubResource("Cuda")
-script_source = SubResource("Script")
-overlay_source = SubResource("Overlay")
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+
+[node name="Renderers" type="Node" parent="."]
+
+[node name="Source" type="Node" parent="Renderers"]
+script = ExtResource("4")
+display_name = "SOURCE"
+source_texture = SubResource("Source")
+provider = "gdscript"
+
+[node name="Overlay" type="Node" parent="Renderers"]
+script = ExtResource("4")
+source_texture = SubResource("Overlay")
+provider = "gdscript"
+operation = "aa57de9d-d269-4e29-8892-5a047fbf0601"
+
+[node name="ProjectCompiler" type="Node" parent="Renderers"]
+script = ExtResource("6")
+source_file = "res://compute/images.cu"
+
+[node name="Exposure" type="Node" parent="Renderers"]
+script = ExtResource("5")
+maximum_kernel = 127
+
+[node name="Native" type="Node" parent="Renderers"]
+
+[node name="Source" type="Node" parent="Renderers/Native" node_paths=PackedStringArray("provider_node", "policy")]
+script = ExtResource("4")
+source_texture = SubResource("Source")
+provider = "cpu"
+
+[node name="Filter" type="Node" parent="Renderers/Native" node_paths=PackedStringArray("input") groups=["lab_filters"]]
+script = ExtResource("4")
+input = NodePath("../Source")
+
+[node name="Output" type="Node" parent="Renderers/Native" node_paths=PackedStringArray("input", "operand") groups=["lab_outputs"]]
+script = ExtResource("4")
+display_name = "NATIVE C++"
+input = NodePath("../Filter")
+operand = NodePath("../../Overlay")
+operation = "aa57de9d-d269-4e29-8892-5a047fbf0603"
+
+[node name="Project" type="Node" parent="Renderers"]
+
+[node name="Source" type="Node" parent="Renderers/Project" node_paths=PackedStringArray("provider_node", "policy")]
+script = ExtResource("4")
+source_texture = SubResource("Source")
+provider = ""
+provider_node = NodePath("../../ProjectCompiler")
+policy = NodePath("../../Exposure")
+
+[node name="Filter" type="Node" parent="Renderers/Project" node_paths=PackedStringArray("input") groups=["lab_filters"]]
+script = ExtResource("4")
+input = NodePath("../Source")
+
+[node name="Output" type="Node" parent="Renderers/Project" node_paths=PackedStringArray("input", "operand") groups=["lab_outputs"]]
+script = ExtResource("4")
+display_name = "PROJECT CUDA"
+input = NodePath("../Filter")
+operand = NodePath("../../Overlay")
+operation = "aa57de9d-d269-4e29-8892-5a047fbf0603"
+
+[node name="Script" type="Node" parent="Renderers"]
+
+[node name="Source" type="Node" parent="Renderers/Script" node_paths=PackedStringArray("provider_node", "policy")]
+script = ExtResource("4")
+source_texture = SubResource("Source")
+provider = "gdscript"
+
+[node name="Filter" type="Node" parent="Renderers/Script" node_paths=PackedStringArray("input") groups=["lab_filters"]]
+script = ExtResource("4")
+input = NodePath("../Source")
+
+[node name="Output" type="Node" parent="Renderers/Script" node_paths=PackedStringArray("input", "operand") groups=["lab_outputs"]]
+script = ExtResource("4")
+display_name = "GDSCRIPT"
+input = NodePath("../Filter")
+operand = NodePath("../../Overlay")
+operation = "aa57de9d-d269-4e29-8892-5a047fbf0603"
 
 [node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -52,19 +123,20 @@ theme_override_constants/separation = 8
 
 [node name="Kicker" type="Label" parent="Margin/Page/Heading"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.51, 0.90, 0.76, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
 text = "TETRODOTOXIN  /  COMPUTE LAB"
 
 [node name="Title" type="Label" parent="Margin/Page/Heading"]
 layout_mode = 2
+theme_type_variation = &"TitleLabel"
 theme_override_font_sizes/font_size = 34
-text = "One image contract. Three providers."
+text = "One renderer surface. Composable scenes."
 
 [node name="Subtitle" type="Label" parent="Margin/Page/Heading"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.61, 0.68, 0.78, 1)
-text = "GDScript, C++ and CUDA cooperate through TTX — the client stays the same."
+theme_type_variation = &"MutedLabel"
+text = "Connect renderer nodes, policies and project CUDA source in the scene tree."
 
 [node name="Controls" type="HBoxContainer" parent="Margin/Page"]
 layout_mode = 2
@@ -73,7 +145,7 @@ theme_override_constants/separation = 12
 [node name="Mode" type="OptionButton" parent="Margin/Page/Controls"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Same inversion algorithm, or spatial versus FFT convolution"
+tooltip_text = "Operations discovered from the connected renderers"
 
 [node name="Size" type="OptionButton" parent="Margin/Page/Controls"]
 unique_name_in_owner = true
@@ -104,156 +176,54 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 16
 
-[node name="SourcePreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
-unique_name_in_owner = true
+[node name="Source" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
 layout_mode = 2
+renderer = NodePath("../../../../Renderers/Source")
 
-[node name="Title" parent="Margin/Page/Previews/SourcePreview/Content" index="0"]
-text = "01  /  SOURCE"
-
-[node name="Caption" parent="Margin/Page/Previews/SourcePreview/Content" index="3"]
-text = "Fresh pixels · GDScript overlay"
-
-[node name="CpuPreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
-unique_name_in_owner = true
+[node name="Native" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
 layout_mode = 2
+renderer = NodePath("../../../../Renderers/Native/Output")
 
-[node name="Title" parent="Margin/Page/Previews/CpuPreview/Content" index="0"]
-text = "02  /  NATIVE C++"
-
-[node name="Caption" parent="Margin/Page/Previews/CpuPreview/Content" index="3"]
-text = "FFTW blur + script overlay"
-
-[node name="CudaPreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
-unique_name_in_owner = true
+[node name="Project" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
 layout_mode = 2
+renderer = NodePath("../../../../Renderers/Project/Output")
 
-[node name="Title" parent="Margin/Page/Previews/CudaPreview/Content" index="0"]
-text = "03  /  CUDA"
-
-[node name="Caption" parent="Margin/Page/Previews/CudaPreview/Content" index="3"]
-text = "cuFFT blur + script overlay"
-
-[node name="ScriptPreview" parent="Margin/Page/Previews" instance=ExtResource("3")]
-unique_name_in_owner = true
+[node name="Script" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
 layout_mode = 2
-
-[node name="Title" parent="Margin/Page/Previews/ScriptPreview/Content" index="0"]
-text = "04  /  GDSCRIPT"
-
-[node name="Caption" parent="Margin/Page/Previews/ScriptPreview/Content" index="3"]
-text = "Spatial blur + script overlay"
-
-[node name="Metrics" type="HBoxContainer" parent="Margin/Page"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="RatioBox" type="VBoxContainer" parent="Margin/Page/Metrics"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="Label" type="Label" parent="Margin/Page/Metrics/RatioBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "C++ / CUDA · THIS RUN"
-
-[node name="Ratio" type="Label" parent="Margin/Page/Metrics/RatioBox"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 26
-text = "—"
-
-[node name="Cpu" type="VBoxContainer" parent="Margin/Page/Metrics"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CpuMetric" type="Label" parent="Margin/Page/Metrics/Cpu"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "CPU · WARM CONVOLUTION"
-
-[node name="CpuTime" type="Label" parent="Margin/Page/Metrics/Cpu"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 26
-text = "Preparing…"
-
-[node name="Cuda" type="VBoxContainer" parent="Margin/Page/Metrics"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CudaMetric" type="Label" parent="Margin/Page/Metrics/Cuda"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "CUDA · WARM CONVOLUTION"
-
-[node name="CudaTime" type="Label" parent="Margin/Page/Metrics/Cuda"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.51, 0.90, 0.76, 1)
-theme_override_font_sizes/font_size = 26
-text = "Preparing…"
-
-[node name="Script" type="VBoxContainer" parent="Margin/Page/Metrics"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="ScriptMetric" type="Label" parent="Margin/Page/Metrics/Script"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "GDSCRIPT · SPATIAL CONVOLUTION"
-
-[node name="ScriptTime" type="Label" parent="Margin/Page/Metrics/Script"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 26
-text = "Preparing…"
+renderer = NodePath("../../../../Renderers/Script/Output")
 
 [node name="Summary" type="HBoxContainer" parent="Margin/Page"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="Status" type="Label" parent="Margin/Page/Summary"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
-text = "PREPARING PROVIDERS"
+text = "PREPARING RENDERERS"
 
-[node name="Readback" type="Label" parent="Margin/Page/Summary"]
+[node name="Elapsed" type="Label" parent="Margin/Page/Summary"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.58, 0.65, 0.75, 1)
-theme_override_font_sizes/font_size = 13
+theme_type_variation = &"MutedLabel"
+tooltip_text = "Synchronous request time, including input preparation, rendering, texture upload and output comparison. Deferred panel updates and screen presentation follow."
+text = "Request pending"
 
 [node name="Interaction" type="HBoxContainer" parent="Margin/Page"]
 layout_mode = 2
 
 [node name="Detail" type="Label" parent="Margin/Page/Interaction"]
-unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.61, 0.68, 0.78, 1)
-text = "Move the overlay to reuse the existing blur results."
+theme_type_variation = &"MutedLabel"
+text = "Move the overlay. Only connected downstream renderer nodes refresh."
 
 [node name="MoveOverlay" type="Button" parent="Margin/Page/Interaction"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Move overlay →"
-theme_override_colors/font_color = Color(0.51, 0.90, 0.76, 1)
 
 [connection signal="pressed" from="Margin/Page/Controls/Compare" to="." method="compare"]
 [connection signal="pressed" from="Margin/Page/Controls/ChangeSource" to="." method="next_sample"]
 [connection signal="pressed" from="Margin/Page/Interaction/MoveOverlay" to="." method="move_overlay"]
-
-[editable path="Margin/Page/Previews/SourcePreview"]
-[editable path="Margin/Page/Previews/CpuPreview"]
-[editable path="Margin/Page/Previews/CudaPreview"]
-
-[editable path="Margin/Page/Previews/ScriptPreview"]

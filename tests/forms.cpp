@@ -6,7 +6,7 @@
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/null_terminated.hpp"
 
-#include "images/image.hpp"
+#include "imaging/graph/image.hpp"
 
 using namespace Godot;
 using namespace Perimortem;
@@ -27,24 +27,24 @@ static auto accepted(Utility::Result<Value, Core::View::Bytes> result)
       });
 }
 
-static auto representation(const Images::Image& image)
+static auto representation(const Imaging::Graph::Image& image)
     -> const Ttx::Data::Form::Representation& {
   const auto object = image.get_abi();
   return *object.operations->representation(object.source);
 }
 
-static void sharing(Images::Provider& provider, Bool device) {
+static void sharing(Imaging::Graph::Provider& provider, Bool device) {
   const auto live_images = provider.statistics().live_images;
   Memory::Allocator::Arena errors;
   const U8 pixels[] = {1, 2, 3, 255};
   const U8 inverted[] = {254, 253, 252, 255};
   const auto* operation = provider.get_vocabulary().find("invert"_view);
   require(operation != nullptr, "Form check requires inversion."_view);
-  Core::Option<Images::Image> retained;
+  Core::Option<Imaging::Graph::Image> retained;
   const U8* bytes = nullptr;
   {
     auto source = accepted(
-        Images::Image::create(
+        Imaging::Graph::Image::create(
             provider, 1, 1, Core::View::Bytes(pixels, 4), errors));
     retained = accepted(source.apply(*operation, nullptr, nullptr, errors));
     bytes = representation(source).get_bytes().get_data();
@@ -73,7 +73,7 @@ static void sharing(Images::Provider& provider, Bool device) {
 
   const U8 other_pixels[] = {9, 8, 7, 255, 6, 5, 4, 255};
   auto other = accepted(
-      Images::Image::create(
+      Imaging::Graph::Image::create(
           provider, 2, 1, Core::View::Bytes(other_pixels, 8), errors));
   require(
       !representation(*retained).compatible(representation(other)),
@@ -98,7 +98,7 @@ static void sharing(Images::Provider& provider, Bool device) {
       "Second derivative did not survive source release."_view);
 }
 
-void Tests::Forms::check(Images::Provider& provider, Bool device) {
+void Tests::Forms::check(Imaging::Graph::Provider& provider, Bool device) {
   // Bibliotheca retains free pool blocks for reuse. Compare active allocation
   // bytes so growing that pool cannot be mistaken for a surviving form owner.
   const auto allocated = Core::Bibliotheca::allocated_memory();

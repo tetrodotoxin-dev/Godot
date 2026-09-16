@@ -41,59 +41,98 @@ func _run() -> void:
 
     if not _agree():
         return
-    var before: PackedByteArray = lab.cpu_view.texture.get_image().get_data()
-    var cpu_blur: TtxImage = lab.cpu.filtered
-    var cuda_blur: TtxImage = lab.cuda.filtered
-    var script_blur: TtxImage = lab.scripted.filtered
+    var renderers: Array[Node] = lab.get_renderers()
+    var before: PackedByteArray = renderers[0].get_texture().get_image().get_data()
+    var revisions: Array = []
+    for renderer: TtxRender in renderers:
+        revisions.append(renderer.input.get_revision())
     if not await _capture(4):
         return
 
-    # Emit the actual button signal. Merely rerunning comparison would create
-    # another graph and miss the promise that an existing result follows edits.
+    # Editing the shared overlay invalidates the connected output nodes. The
+    # filter nodes keep their observations, and the panels update from signals.
     for step in 5:
         lab.get_node("%MoveOverlay").pressed.emit()
-        if lab.cpu.filtered != cpu_blur or lab.cuda.filtered != cuda_blur or lab.scripted.filtered != script_blur:
-            _fail("Moving the overlay replaced a blur Resource")
-            return
         if not _agree():
             return
-        if before == lab.cpu_view.texture.get_image().get_data():
-            _fail("Moving the overlay did not change the displayed pixels")
+        for index in renderers.size():
+            if renderers[index].input.get_revision() != revisions[index]:
+                _fail("An overlay edit recomputed an upstream filter")
+                return
+        if before == renderers[0].get_texture().get_image().get_data():
+            _fail("The connected overlay did not change output pixels")
             return
         if not await _capture(2):
             return
 
-    # A source edit should affect the wider branch. The same script and
-    # rendering controls continue to consume both provider implementations.
     lab.get_node("%ChangeSource").pressed.emit()
-    if lab.cpu.filtered == cpu_blur or lab.cuda.filtered == cuda_blur or lab.scripted.filtered == script_blur:
-        _fail("Changing source did not replace the affected blur results")
-        return
     if not _agree():
+        return
+    for index in renderers.size():
+        if renderers[index].input.get_revision() <= revisions[index]:
+            _fail("A source edit failed to recompute a connected filter")
+            return
+    if not await _capture(4):
+        return
+
+    # Duplicate a configured renderer subtree and reuse the same panel scene.
+    # The existing controller discovers its groups without a fourth code path.
+    var extra: Node = renderers[0].get_parent().duplicate()
+    extra.name = "AdditionalRenderer"
+    lab.get_node("Renderers").add_child(extra)
+    var panel: Control = load("res://preview.tscn").instantiate()
+    panel.renderer = extra.get_node("Output")
+    lab.get_node("Margin/Page/Previews").add_child(panel)
+    lab.get_node("%Compare").pressed.emit()
+    if not _agree(4):
+        return
+    panel.free()
+    extra.free()
+
+    # A new project effect has its own UUID. Availability is observed from
+    # nodes rather than inferred from implementation labels in the controller.
+    var modes: OptionButton = lab.get_node("%Mode")
+    var found := false
+    for index in modes.item_count:
+        if modes.get_item_metadata(index).contract == "b3ca4a5b-3a72-4f17-861c-24b37bf70001":
+            modes.select(index)
+            found = true
+    if not found:
+        _fail("The project effect was not discovered")
+        return
+    lab.get_node("%Compare").pressed.emit()
+    var available := 0
+    for renderer: TtxRender in renderers:
+        if renderer.get_texture() != null:
+            available += 1
+    if available != 1:
+        _fail("Renderer nodes did not preserve their separate capabilities")
         return
     if not await _capture(4):
         return
-    lab.get_node("%Mode").select(1)
-    lab.get_node("%Compare").pressed.emit()
-    if not _agree() or not await _capture(4):
-        return
-    print("PASS visual: GDScript/CPU/CUDA agreement, retained blur on overlay edit, source invalidation")
+    print("PASS visual: scene renderer composition, native/script agreement, retained upstream filters and discovered project effect")
     quit()
 
-func _agree() -> bool:
-    if lab.cpu.composite == null or lab.cuda.composite == null or lab.scripted.composite == null:
-        _fail("All providers must run: %s / %s / %s" % [lab.cpu.error, lab.cuda.error, lab.scripted.error])
+func _agree(expected: int = 3) -> bool:
+    var reference := PackedByteArray()
+    var renderers: Array[Node] = lab.get_renderers()
+    if renderers.size() != expected:
+        _fail("The scene did not publish its configured output renderers")
         return false
-
-    var reference: PackedByteArray = lab.cpu_view.texture.get_image().get_data()
-    for view in [lab.cuda_view, lab.script_view]:
-        var pixels: PackedByteArray = view.texture.get_image().get_data()
+    for renderer: TtxRender in renderers:
+        var texture := renderer.get_texture()
+        if texture == null:
+            _fail("A renderer could not produce a texture: " + renderer.get_error())
+            return false
+        var pixels := texture.get_image().get_data()
+        if reference.is_empty():
+            reference = pixels
         if reference.is_empty() or reference.size() != pixels.size():
             _fail("Displayed image extents disagree")
             return false
         var maximum := 0
         for index in pixels.size():
-            maximum = maxi(maximum, absi(reference[index] - pixels[index]))
+            maximum = maxi(maximum, absi(pixels[index] - reference[index]))
         if maximum > 1:
             _fail("Displayed values differ by more than one byte")
             return false

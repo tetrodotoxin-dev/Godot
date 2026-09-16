@@ -17,6 +17,7 @@ func _initialize() -> void:
     _run.call_deferred()
 
 func _run() -> void:
+    _support()
     _ownership()
     _configuration()
     _delegation()
@@ -29,6 +30,19 @@ func _run() -> void:
     if not failed:
         print("PASS script provider: admission, immutable observations, lifetime, refusals, reentrancy, retained calls and mixed composition")
     quit(1 if failed else 0)
+
+# Property inspection neither acquires a Callable nor repairs an incompatible
+# implementation. The bad signature still supports INVERT as a semantic promise.
+func _support() -> void:
+    var factory := Factory.new()
+    factory.mode = "bad_signature"
+    var image = factory.create_image(1, 1, PackedByteArray([1, 2, 3, 255]))
+    require(image.supports(image.INVERT) == 0, "Support depended on callable acquisition")
+    require(image.bindings == 0, "Support acquired a script Callable")
+    image.mode = "pending"
+    require(image.supports(image.INVERT) == image.PENDING, "Support lost Pending")
+    image.mode = "rejected"
+    require(image.supports(image.INVERT) == image.REJECTED, "Support lost Rejected")
 
 func _ownership() -> void:
     var factory := Factory.new()
