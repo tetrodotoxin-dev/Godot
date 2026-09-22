@@ -1,6 +1,7 @@
 # # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
+@tool
 extends RefCounted
 
 # These UUIDs name the same callable promises as contracts/image.h. The bridge

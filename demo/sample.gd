@@ -19,26 +19,6 @@ static func pixels(width: int, height: int, seed: int) -> PackedByteArray:
 
 	return output
 
-# A normalized disk approximates a lens aperture. Its broad neighborhood makes
-# the FFT work substantial while preserving a simple, reviewable filter shape.
-static func kernel(diameter: int) -> PackedFloat32Array:
-	var weights := PackedFloat32Array()
-	weights.resize(diameter * diameter)
-	var radius := diameter / 2
-	var count := 0
-	for y in diameter:
-		for x in diameter:
-			var dx := x - radius
-			var dy := y - radius
-			if dx * dx + dy * dy <= radius * radius:
-				weights[y * diameter + x] = 1.0
-				count += 1
-
-	for index in weights.size():
-		weights[index] /= count
-
-	return weights
-
 static func overlay(width: int, height: int, step: int) -> PackedByteArray:
 	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
 	image.fill(Color.TRANSPARENT)

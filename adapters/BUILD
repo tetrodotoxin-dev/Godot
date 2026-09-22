@@ -46,3 +46,13 @@ filegroup(
     name = "scene",
     srcs = glob(["imaging/scene/*.gd"]),
 )
+
+filegroup(
+    name = "resources",
+    srcs = glob([
+        "imaging/resources/*.gd",
+        "imaging/editor/*.gd",
+        "cuda/resources/*.gd",
+        "cuda/editor/*.gd",
+    ]),
+)

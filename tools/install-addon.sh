@@ -25,6 +25,9 @@ while IFS= read -r -d '' file; do
     mkdir -p -- "$(dirname -- "$addon_root/$relative")"
     mv -f -- "$file" "$addon_root/$relative"
 done < <(rg --files --hidden --null "$staging")
+# Policy moved from a Node script to a Resource. Leaving the old generated
+# script installed would register the same Godot class twice during upgrade.
+rm -f -- "$addon_root/scene/policy.gd" "$addon_root/scene/policy.gd.uid"
 for library in libcuda_provider.so libttx_cuda.so; do
     if ! tar -tf "$archive" | rg -Fxq "$library"; then
         rm -f -- "$addon_root/$library"

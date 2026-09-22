@@ -121,7 +121,7 @@ func _admission() -> void:
 	require(result != null and result.invert() == null, "An operation result shed its project policy")
 
 func _project_images() -> void:
-	var factory := ProjectFactory.new()
+	var factory := ProjectFactory.new(load("res://compute/images.cu"))
 	require(factory.error.is_empty(), factory.error)
 	if failed: return
 	var source := TtxImage.new()

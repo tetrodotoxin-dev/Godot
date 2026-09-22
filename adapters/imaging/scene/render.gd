@@ -1,6 +1,7 @@
 # # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
+@tool
 class_name TtxRender extends Node
 
 # The scene owns rendering relationships. A renderer can import an ordinary
@@ -51,24 +52,19 @@ signal output_changed
 		source_texture = value
 		_invalidate()
 
-# Provider configuration belongs only to source nodes. A provider node can
-# supply a script factory, including one built from project CUDA source.
-# Derived renderers inherit their input's implementation through its image API.
-@export var provider := "cpu":
+# Provider Resources describe construction. Each source node owns the image
+# source it constructs, so duplicated scenes can share configuration without
+# accidentally sharing mutable image state.
+@export var provider: TtxImageProvider = TtxModuleImages.new():
 	set(value):
 		if not _change_allowed():
 			return
+		if provider != null and provider.changed.is_connected(_provider_changed):
+			provider.changed.disconnect(_provider_changed)
 		provider = value
-		_source = null
-		_invalidate()
-
-@export var provider_node: Node:
-	set(value):
-		if not _change_allowed():
-			return
-		provider_node = value
-		_source = null
-		_invalidate()
+		if provider != null:
+			provider.changed.connect(_provider_changed)
+		_provider_changed()
 
 @export var policy: TtxRenderPolicy:
 	set(value):
@@ -127,7 +123,26 @@ func _watch(previous: Object, next: Object, event: String) -> void:
 		if next is Node and not next.tree_exited.is_connected(_invalidate):
 			next.tree_exited.connect(_invalidate)
 
+func _provider_changed() -> void:
+	_source = null
+	_invalidate()
+
+func _get_configuration_warnings() -> PackedStringArray:
+	var warnings := PackedStringArray()
+	if not is_instance_valid(input):
+		if source_texture == null:
+			warnings.append("Assign a source texture or connect an input renderer.")
+		if provider == null:
+			warnings.append("Assign an image provider Resource.")
+		else:
+			warnings.append_array(provider.get_configuration_warnings())
+	if not _error.is_empty():
+		warnings.append(_error)
+	return warnings
+
 func _invalidate() -> void:
+	if Engine.is_editor_hint() and is_inside_tree():
+		update_configuration_warnings()
 	_generation += 1
 	_texture = null
 	if _dirty:
@@ -145,21 +160,26 @@ func _base() -> TtxImage:
 		_error = "Connect an input renderer or a source texture."
 		return null
 	if _source == null:
-		_source = TtxImage.new()
-		if is_instance_valid(provider_node):
-			_source.set_provider_object(provider_node.create_provider())
-		else:
-			_source.provider = provider
+		if provider == null:
+			_error = "Assign an image provider Resource."
+			return null
+		_source = provider.create_source()
+		if _source == null:
+			_error = "The provider could not create an image source."
+			return null
+	# Resource edits can arrive during a provider callback. Retain the source
+	# for this observation even if an edit invalidates the next publication.
+	var source := _source
 	var image := source_texture.get_image()
 	if image == null or image.is_empty():
 		_error = "The source texture has no observable image."
 		return null
 	image = image.duplicate()
 	image.convert(Image.FORMAT_RGBA8)
-	if not _source.set_rgba8(image.get_width(), image.get_height(), image.get_data()):
-		_error = _source.get_error()
+	if not source.set_rgba8(image.get_width(), image.get_height(), image.get_data()):
+		_error = source.get_error()
 		return null
-	return _source
+	return source
 
 # Each observation starts from the actual output publication. Ancestor scene
 # policies remain visible, but an ancestor's old capability inventory does not

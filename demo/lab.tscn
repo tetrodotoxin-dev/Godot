@@ -1,17 +1,16 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene format=3 uid="uid://cm40q4ht1mic7"]
 
-[ext_resource type="Script" path="res://lab.gd" id="1"]
-[ext_resource type="Theme" path="res://theme.tres" id="2"]
-[ext_resource type="PackedScene" path="res://preview.tscn" id="3"]
-[ext_resource type="Script" path="res://addons/godot_ttx/scene/render.gd" id="4"]
-[ext_resource type="Script" path="res://addons/godot_ttx/scene/policy.gd" id="5"]
-[ext_resource type="Script" path="res://compute/provider_node.gd" id="6"]
+[ext_resource type="Script" uid="uid://bc44p4poeumj2" path="res://lab.gd" id="1"]
+[ext_resource type="Theme" uid="uid://b47m36c6hyvuj" path="res://theme.tres" id="2"]
+[ext_resource type="PackedScene" path="res://cards/render.tscn" id="3"]
+[ext_resource type="Resource" path="res://providers/gdscript.tres" id="5"]
+[ext_resource type="Resource" uid="uid://b1kssor7vlrrc" path="res://providers/exposure.tres" id="7"]
 
 [sub_resource type="ImageTexture" id="Source"]
 
 [sub_resource type="ImageTexture" id="Overlay"]
 
-[node name="Lab" type="Control"]
+[node name="Lab" type="Control" unique_id=1008438922]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -23,85 +22,7 @@ script = ExtResource("1")
 source_texture = SubResource("Source")
 overlay_texture = SubResource("Overlay")
 
-[node name="Renderers" type="Node" parent="."]
-
-[node name="Source" type="Node" parent="Renderers"]
-script = ExtResource("4")
-display_name = "SOURCE"
-source_texture = SubResource("Source")
-provider = "gdscript"
-
-[node name="Overlay" type="Node" parent="Renderers"]
-script = ExtResource("4")
-source_texture = SubResource("Overlay")
-provider = "gdscript"
-operation = "aa57de9d-d269-4e29-8892-5a047fbf0601"
-
-[node name="ProjectCompiler" type="Node" parent="Renderers"]
-script = ExtResource("6")
-source_file = "res://compute/images.cu"
-
-[node name="Exposure" type="Node" parent="Renderers"]
-script = ExtResource("5")
-maximum_kernel = 127
-
-[node name="Native" type="Node" parent="Renderers"]
-
-[node name="Source" type="Node" parent="Renderers/Native" node_paths=PackedStringArray("provider_node", "policy")]
-script = ExtResource("4")
-source_texture = SubResource("Source")
-provider = "cpu"
-
-[node name="Filter" type="Node" parent="Renderers/Native" node_paths=PackedStringArray("input") groups=["lab_filters"]]
-script = ExtResource("4")
-input = NodePath("../Source")
-
-[node name="Output" type="Node" parent="Renderers/Native" node_paths=PackedStringArray("input", "operand") groups=["lab_outputs"]]
-script = ExtResource("4")
-display_name = "NATIVE C++"
-input = NodePath("../Filter")
-operand = NodePath("../../Overlay")
-operation = "aa57de9d-d269-4e29-8892-5a047fbf0603"
-
-[node name="Project" type="Node" parent="Renderers"]
-
-[node name="Source" type="Node" parent="Renderers/Project" node_paths=PackedStringArray("provider_node", "policy")]
-script = ExtResource("4")
-source_texture = SubResource("Source")
-provider = ""
-provider_node = NodePath("../../ProjectCompiler")
-policy = NodePath("../../Exposure")
-
-[node name="Filter" type="Node" parent="Renderers/Project" node_paths=PackedStringArray("input") groups=["lab_filters"]]
-script = ExtResource("4")
-input = NodePath("../Source")
-
-[node name="Output" type="Node" parent="Renderers/Project" node_paths=PackedStringArray("input", "operand") groups=["lab_outputs"]]
-script = ExtResource("4")
-display_name = "PROJECT CUDA"
-input = NodePath("../Filter")
-operand = NodePath("../../Overlay")
-operation = "aa57de9d-d269-4e29-8892-5a047fbf0603"
-
-[node name="Script" type="Node" parent="Renderers"]
-
-[node name="Source" type="Node" parent="Renderers/Script" node_paths=PackedStringArray("provider_node", "policy")]
-script = ExtResource("4")
-source_texture = SubResource("Source")
-provider = "gdscript"
-
-[node name="Filter" type="Node" parent="Renderers/Script" node_paths=PackedStringArray("input") groups=["lab_filters"]]
-script = ExtResource("4")
-input = NodePath("../Source")
-
-[node name="Output" type="Node" parent="Renderers/Script" node_paths=PackedStringArray("input", "operand") groups=["lab_outputs"]]
-script = ExtResource("4")
-display_name = "GDSCRIPT"
-input = NodePath("../Filter")
-operand = NodePath("../../Overlay")
-operation = "aa57de9d-d269-4e29-8892-5a047fbf0603"
-
-[node name="Margin" type="MarginContainer" parent="."]
+[node name="Margin" type="MarginContainer" parent="." unique_id=700596401]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -113,117 +34,129 @@ theme_override_constants/margin_top = 26
 theme_override_constants/margin_right = 30
 theme_override_constants/margin_bottom = 26
 
-[node name="Page" type="VBoxContainer" parent="Margin"]
+[node name="Page" type="VBoxContainer" parent="Margin" unique_id=345168575]
 layout_mode = 2
 theme_override_constants/separation = 18
 
-[node name="Heading" type="VBoxContainer" parent="Margin/Page"]
+[node name="Heading" type="VBoxContainer" parent="Margin/Page" unique_id=1938427212]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Kicker" type="Label" parent="Margin/Page/Heading"]
+[node name="Top" type="Label" parent="Margin/Page/Heading" unique_id=855717204]
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
 text = "TETRODOTOXIN  /  COMPUTE LAB"
 
-[node name="Title" type="Label" parent="Margin/Page/Heading"]
+[node name="Title" type="Label" parent="Margin/Page/Heading" unique_id=573213287]
 layout_mode = 2
 theme_type_variation = &"TitleLabel"
 theme_override_font_sizes/font_size = 34
 text = "One renderer surface. Composable scenes."
 
-[node name="Subtitle" type="Label" parent="Margin/Page/Heading"]
+[node name="Subtitle" type="Label" parent="Margin/Page/Heading" unique_id=1960824956]
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
 text = "Connect renderer nodes, policies and project CUDA source in the scene tree."
 
-[node name="Controls" type="HBoxContainer" parent="Margin/Page"]
+[node name="Controls" type="HBoxContainer" parent="Margin/Page" unique_id=1182411800]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="Mode" type="OptionButton" parent="Margin/Page/Controls"]
+[node name="Mode" type="OptionButton" parent="Margin/Page/Controls" unique_id=751049909]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Operations discovered from the connected renderers"
 
-[node name="Size" type="OptionButton" parent="Margin/Page/Controls"]
+[node name="Size" type="OptionButton" parent="Margin/Page/Controls" unique_id=1489432433]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Source dimensions"
 
-[node name="Kernel" type="OptionButton" parent="Margin/Page/Controls"]
+[node name="Kernel" type="OptionButton" parent="Margin/Page/Controls" unique_id=1887529288]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Normalized lens-blur kernel"
 
-[node name="Space" type="Control" parent="Margin/Page/Controls"]
+[node name="Space" type="Control" parent="Margin/Page/Controls" unique_id=315679460]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ChangeSource" type="Button" parent="Margin/Page/Controls"]
+[node name="ChangeSource" type="Button" parent="Margin/Page/Controls" unique_id=1336909392]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Change source"
 
-[node name="Compare" type="Button" parent="Margin/Page/Controls"]
+[node name="Compare" type="Button" parent="Margin/Page/Controls" unique_id=1954576632]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Run comparison"
 
-[node name="Previews" type="HBoxContainer" parent="Margin/Page"]
+[node name="Previews" type="HBoxContainer" parent="Margin/Page" unique_id=331692868]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 16
 
-[node name="Source" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
+[node name="Source" parent="Margin/Page/Previews" unique_id=126970192 instance=ExtResource("3")]
 layout_mode = 2
-renderer = NodePath("../../../../Renderers/Source")
+display_name = "SOURCE"
+provider = ExtResource("5")
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+show_source = true
 
-[node name="Native" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
+[node name="Native" parent="Margin/Page/Previews" unique_id=88133044 instance=ExtResource("3")]
 layout_mode = 2
-renderer = NodePath("../../../../Renderers/Native/Output")
+display_name = "NATIVE C++"
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
 
-[node name="Project" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
+[node name="Project" parent="Margin/Page/Previews" unique_id=1312417821 instance=ExtResource("3")]
 layout_mode = 2
-renderer = NodePath("../../../../Renderers/Project/Output")
+display_name = "PROJECT CUDA"
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+policy = ExtResource("7")
 
-[node name="Script" parent="Margin/Page/Previews" node_paths=PackedStringArray("renderer") instance=ExtResource("3")]
+[node name="Script" parent="Margin/Page/Previews" unique_id=1720727971 instance=ExtResource("3")]
 layout_mode = 2
-renderer = NodePath("../../../../Renderers/Script/Output")
+display_name = "GDSCRIPT"
+provider = ExtResource("5")
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
 
-[node name="Summary" type="HBoxContainer" parent="Margin/Page"]
+[node name="Summary" type="HBoxContainer" parent="Margin/Page" unique_id=599847708]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Status" type="Label" parent="Margin/Page/Summary"]
+[node name="Status" type="Label" parent="Margin/Page/Summary" unique_id=1487243882]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
 text = "PREPARING RENDERERS"
 
-[node name="Elapsed" type="Label" parent="Margin/Page/Summary"]
+[node name="Elapsed" type="Label" parent="Margin/Page/Summary" unique_id=1674033996]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"MutedLabel"
 tooltip_text = "Synchronous request time, including input preparation, rendering, texture upload and output comparison. Deferred panel updates and screen presentation follow."
+theme_type_variation = &"MutedLabel"
 text = "Request pending"
 
-[node name="Interaction" type="HBoxContainer" parent="Margin/Page"]
+[node name="Interaction" type="HBoxContainer" parent="Margin/Page" unique_id=2057941520]
 layout_mode = 2
 
-[node name="Detail" type="Label" parent="Margin/Page/Interaction"]
+[node name="Detail" type="Label" parent="Margin/Page/Interaction" unique_id=487224628]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"MutedLabel"
 text = "Move the overlay. Only connected downstream renderer nodes refresh."
 
-[node name="MoveOverlay" type="Button" parent="Margin/Page/Interaction"]
+[node name="MoveOverlay" type="Button" parent="Margin/Page/Interaction" unique_id=725861085]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Move overlay →"
 
-[connection signal="pressed" from="Margin/Page/Controls/Compare" to="." method="compare"]
 [connection signal="pressed" from="Margin/Page/Controls/ChangeSource" to="." method="next_sample"]
+[connection signal="pressed" from="Margin/Page/Controls/Compare" to="." method="compare"]
 [connection signal="pressed" from="Margin/Page/Interaction/MoveOverlay" to="." method="move_overlay"]

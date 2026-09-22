@@ -75,18 +75,15 @@ func _run() -> void:
     if not await _capture(4):
         return
 
-    # Duplicate a configured renderer subtree and reuse the same panel scene.
-    # The existing controller discovers its groups without a fourth code path.
-    var extra: Node = renderers[0].get_parent().duplicate()
+    # The complete card is the reusable unit. Its default source, provider and
+    # internal pipeline make it runnable without the lab's separate wiring.
+    var cards := lab.get_node("Margin/Page/Previews")
+    var extra: Control = cards.get_node("Native").duplicate()
     extra.name = "AdditionalRenderer"
-    lab.get_node("Renderers").add_child(extra)
-    var panel: Control = load("res://preview.tscn").instantiate()
-    panel.renderer = extra.get_node("Output")
-    lab.get_node("Margin/Page/Previews").add_child(panel)
+    cards.add_child(extra)
     lab.get_node("%Compare").pressed.emit()
     if not _agree(4):
         return
-    panel.free()
     extra.free()
 
     # A new project effect has its own UUID. Availability is observed from

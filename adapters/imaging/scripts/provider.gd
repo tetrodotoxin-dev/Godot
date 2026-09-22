@@ -1,6 +1,7 @@
 # # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
+@tool
 extends RefCounted
 
 const ScriptImage = preload("image.gd")

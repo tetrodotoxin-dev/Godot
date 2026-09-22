@@ -6,6 +6,9 @@ config/name="TTX Image Lab"
 run/main_scene="res://lab.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 
+[editor_plugins]
+enabled=PackedStringArray("res://addons/godot_ttx/plugin.cfg")
+
 [display]
 window/size/viewport_width=1440
 window/size/viewport_height=760

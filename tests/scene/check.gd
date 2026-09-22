@@ -15,10 +15,12 @@ class ReentrantFactory extends RefCounted:
 		renderer.operation = INVERT
 		return preload("res://addons/godot_ttx/gdscript/provider.gd").new().create_image(width, height, pixels)
 
-class ProviderNode extends Node:
+class ProviderConfig extends TtxImageProvider:
 	var factory: RefCounted
-	func create_provider() -> RefCounted:
-		return factory
+	func create_source() -> TtxImage:
+		var source := TtxImage.new()
+		source.set_provider_object(factory)
+		return source
 
 func require(condition: bool, message: String) -> void:
 	if not condition:
@@ -65,7 +67,6 @@ func _run() -> void:
 	# A visible policy limits later operations as well as the current renderer.
 	# Removing the policy restores the scene edge, without replacing a backend.
 	var policy := TtxRenderPolicy.new()
-	scene.add_child(policy)
 	policy.restrict_contracts = true
 	policy.contracts = PackedStringArray([INVERT])
 	source.policy = policy
@@ -93,12 +94,11 @@ func _run() -> void:
 	require(retained.get_image().get_data()[0] == 245, "Node destruction revoked a retained Texture2D")
 	var reentrant := TtxRender.new()
 	var factory := ReentrantFactory.new()
-	var provider := ProviderNode.new()
+	var provider := ProviderConfig.new()
 	factory.renderer = reentrant
 	provider.factory = factory
-	scene.add_child(provider)
 	scene.add_child(reentrant)
-	reentrant.provider_node = provider
+	reentrant.provider = provider
 	reentrant.source_texture = pixels
 	require(reentrant.get_texture() != null and reentrant.operation.is_empty(), "A provider changed renderer configuration during observation")
 	scene.free()

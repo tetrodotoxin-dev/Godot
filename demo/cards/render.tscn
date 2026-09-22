@@ -1,0 +1,85 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://cards/render.gd" id="1"]
+
+[ext_resource type="Script" path="res://addons/godot_ttx/scene/render.gd" id="2"]
+[ext_resource type="Theme" path="res://theme.tres" id="3"]
+[ext_resource type="Resource" path="res://providers/cpu.tres" id="4"]
+[ext_resource type="Resource" path="res://providers/gdscript.tres" id="5"]
+
+[node name="RenderCard" type="PanelContainer"]
+custom_minimum_size = Vector2(300, 430)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+theme = ExtResource("3")
+script = ExtResource("1")
+provider = ExtResource("4")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+theme_override_font_sizes/font_size = 13
+text = "SOURCE"
+
+[node name="Image" type="TextureRect" parent="Content"]
+custom_minimum_size = Vector2(0, 218)
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Error" type="Label" parent="Content"]
+visible = false
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"WarningLabel"
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+
+[node name="Caption" type="Label" parent="Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+theme_override_font_sizes/font_size = 13
+text = "RGBA8 pixels"
+
+[node name="Time" type="Label" parent="Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Preparing…"
+
+[node name="Pipeline" type="Node" parent="."]
+
+[node name="Input" type="Node" parent="Pipeline"]
+unique_name_in_owner = true
+script = ExtResource("2")
+
+[node name="Filter" type="Node" parent="Pipeline" node_paths=PackedStringArray("input")]
+unique_name_in_owner = true
+script = ExtResource("2")
+input = NodePath("../Input")
+operation = "aa57de9d-d269-4e29-8892-5a047fbf0601"
+
+[node name="Overlay" type="Node" parent="Pipeline"]
+unique_name_in_owner = true
+script = ExtResource("2")
+provider = ExtResource("5")
+operation = "aa57de9d-d269-4e29-8892-5a047fbf0601"
+
+[node name="Output" type="Node" parent="Pipeline" node_paths=PackedStringArray("input", "operand")]
+unique_name_in_owner = true
+script = ExtResource("2")
+input = NodePath("../Filter")
+operand = NodePath("../Overlay")
+operation = "aa57de9d-d269-4e29-8892-5a047fbf0603"

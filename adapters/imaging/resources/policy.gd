@@ -1,29 +1,29 @@
 # # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
-class_name TtxRenderPolicy extends Node
+@tool
+class_name TtxRenderPolicy extends Resource
 
-# Scene policies restrict the questions exposed by a renderer. Descendants
+# Policy Resources restrict the questions exposed by a renderer. Descendants
 # still ask through their input node, so the restriction survives composition.
 # The underlying provider independently admits its actual workload as well.
 # An enabled contract restriction with an empty list exposes no operations.
 # A zero maximum leaves kernel limits with the provider.
-signal changed
 
 @export var restrict_contracts := false:
 	set(value):
 		restrict_contracts = value
-		changed.emit()
+		emit_changed()
 
 @export var contracts: PackedStringArray = []:
 	set(value):
 		contracts = value.duplicate()
-		changed.emit()
+		emit_changed()
 
 @export var maximum_kernel := 0:
 	set(value):
 		maximum_kernel = value
-		changed.emit()
+		emit_changed()
 
 func filter_offers(offers: Array) -> Array:
 	var result: Array = []

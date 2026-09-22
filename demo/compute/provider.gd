@@ -1,6 +1,7 @@
 # # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
+@tool
 extends RefCounted
 
 # The project chooses entry names and their argument forms. CUDA sees only
@@ -11,8 +12,8 @@ var program := TtxCudaProgram.new()
 var kernels := {}
 var error := ""
 
-func _init(path: String = "res://compute/images.cu") -> void:
-	if not program.compile_file(path):
+func _init(source: TtxCudaSource, options: PackedStringArray = []) -> void:
+	if not program.compile(source.code, {}, options):
 		error = program.get_error()
 		return
 	var declarations := {

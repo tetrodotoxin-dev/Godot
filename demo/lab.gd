@@ -50,7 +50,7 @@ func compare() -> void:
 	var diameter := kernel_choice.get_selected_id()
 	var arguments: Array = []
 	if operation.input == 1:
-		arguments = [Sample.kernel(diameter), diameter, diameter]
+		arguments = [TtxDiskKernel.weights(diameter), diameter, diameter]
 	for renderer: TtxRender in _nodes("lab_filters"):
 		renderer.request(operation.contract, arguments)
 	_observe()

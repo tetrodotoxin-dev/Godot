@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="TtxRenderPolicy" format=3 uid="uid://b1kssor7vlrrc"]
+
+[ext_resource type="Script" uid="uid://b2q8n4lxhs8fw" path="res://addons/godot_ttx/imaging/resources/policy.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+contracts = PackedStringArray()
+maximum_kernel = 127

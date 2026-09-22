@@ -57,7 +57,9 @@ cc_binary(
 filegroup(
     name = "addon_payload",
     srcs = [
+        "addon/editor.gd",
         "addon/godot_ttx.gdextension",
+        "addon/plugin.cfg",
         ":libgodot_ttx.so",
         ":support",
         "//extensions/counter:counter_extension",
@@ -80,9 +82,11 @@ genrule(
         ":addon_payload",
         "//adapters:scripts",
         "//adapters:scene",
+        "//adapters:resources",
     ],
     outs = ["godot_ttx.tar"],
     cmd = "tar -chf $@ --transform='s|.*/||' $(locations :addon_payload) && " +
           "tar -rhf $@ --transform='s|^adapters/imaging/scripts/|gdscript/|' $(locations //adapters:scripts) && " +
-          "tar -rhf $@ --transform='s|^adapters/imaging/||' $(locations //adapters:scene)",
+          "tar -rhf $@ --transform='s|^adapters/imaging/||' $(locations //adapters:scene) && " +
+          "tar -rhf $@ --transform='s|^adapters/||' $(locations //adapters:resources)",
 )
