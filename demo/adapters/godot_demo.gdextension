@@ -1,0 +1,19 @@
+[configuration]
+entry_symbol = "godot_demo_init"
+compatibility_minimum = "4.7"
+reloadable = false
+
+[libraries]
+linux.debug.x86_64 = "./libgodot_demo.so"
+linux.release.x86_64 = "./libgodot_demo.so"
+web.debug.wasm32 = "./libgodot_demo.wasm"
+web.release.wasm32 = "./libgodot_demo.wasm"
+
+[dependencies]
+web.wasm32 = {
+"./libttx_runtime.wasm": "",
+"./liblab_support.wasm": "",
+"./libcounter_extension.wasm": "",
+"./libsampler_extension.wasm": "",
+"./libcpu_provider.wasm": ""
+}

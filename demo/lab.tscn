@@ -4,6 +4,7 @@
 [ext_resource type="Theme" uid="uid://b47m36c6hyvuj" path="res://theme.tres" id="2"]
 [ext_resource type="PackedScene" path="res://cards/render.tscn" id="3"]
 [ext_resource type="Resource" path="res://providers/gdscript.tres" id="5"]
+[ext_resource type="Resource" path="res://providers/project.tres" id="6"]
 [ext_resource type="Resource" uid="uid://b1kssor7vlrrc" path="res://providers/exposure.tres" id="7"]
 
 [sub_resource type="ImageTexture" id="Source"]
@@ -114,6 +115,7 @@ overlay_texture = SubResource("Overlay")
 [node name="Project" parent="Margin/Page/Previews" unique_id=1312417821 instance=ExtResource("3")]
 layout_mode = 2
 display_name = "PROJECT CUDA"
+provider = ExtResource("6")
 source_texture = SubResource("Source")
 overlay_texture = SubResource("Overlay")
 policy = ExtResource("7")
@@ -132,9 +134,18 @@ theme_override_constants/separation = 16
 [node name="Status" type="Label" parent="Margin/Page/Summary" unique_id=1487243882]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
 text = "PREPARING RENDERERS"
+
+[node name="Difference" type="Label" parent="Margin/Page/Summary"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+
+[node name="Space" type="Control" parent="Margin/Page/Summary"]
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="Elapsed" type="Label" parent="Margin/Page/Summary" unique_id=1674033996]
 unique_name_in_owner = true
@@ -155,7 +166,7 @@ text = "Move the overlay. Only connected downstream renderer nodes refresh."
 [node name="MoveOverlay" type="Button" parent="Margin/Page/Interaction" unique_id=725861085]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Move overlay →"
+text = "Move overlay"
 
 [connection signal="pressed" from="Margin/Page/Controls/ChangeSource" to="." method="next_sample"]
 [connection signal="pressed" from="Margin/Page/Controls/Compare" to="." method="compare"]

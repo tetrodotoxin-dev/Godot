@@ -1,0 +1,61 @@
+--- a/emscripten_toolchain/toolchain.bzl
++++ b/emscripten_toolchain/toolchain.bzl
+@@ -957,7 +957,7 @@
+                 "-iwithsysroot" + "/include/compat",
+                 "-iwithsysroot" + "/include",
+                 "-isystem",
+-                emscripten_dir + "/lib/clang/24/include",
++                emscripten_dir + "/lib/clang/22/include",
+             ],
+         ),
+         # Inputs and outputs
+@@ -1124,7 +1124,7 @@
+         emscripten_dir + "/emscripten/cache/sysroot/include/c++/v1",
+         emscripten_dir + "/emscripten/cache/sysroot/include/compat",
+         emscripten_dir + "/emscripten/cache/sysroot/include",
+-        emscripten_dir + "/lib/clang/21/include",
++        emscripten_dir + "/lib/clang/22/include",
+     ]
+ 
+     artifact_name_patterns = []
+diff --git a/emscripten_toolchain/link_wrapper.py b/emscripten_toolchain/link_wrapper.py
+--- a/emscripten_toolchain/link_wrapper.py
++++ b/emscripten_toolchain/link_wrapper.py
+@@ -19,14 +19,36 @@
+ import os
+ import subprocess
+ import sys
++import tarfile
++import tempfile
++from pathlib import Path
+ 
+ # Only argument should be @path/to/parameter/file
+ assert sys.argv[1][0] == '@', sys.argv
+ param_filename = sys.argv[1][1:]
+ param_file_args = [line.strip() for line in open(param_filename).readlines()]
+ 
++# Bazel's shared-library artifacts contain this wrapper's output tar. Recover
++# the Wasm member before linking a dependent module, so cc_shared_library keeps
++# its ordinary dependency ownership instead of statically duplicating runtimes.
++shared_inputs = tempfile.TemporaryDirectory()
++search_paths = [Path(arg[2:]) for arg in param_file_args if arg.startswith('-L')]
++for index, arg in enumerate(param_file_args):
++  if not arg.startswith('-l'):
++    continue
++  for directory in search_paths:
++    candidate = directory / ('lib' + arg[2:])
++    if candidate.is_file() and tarfile.is_tarfile(candidate):
++      with tarfile.open(candidate) as archive:
++        members = [member for member in archive if member.name.endswith('.wasm')]
++        assert len(members) == 1, candidate
++        output = Path(shared_inputs.name) / Path(members[0].name).name
++        output.write_bytes(archive.extractfile(members[0]).read())
++        param_file_args[index] = str(output)
++      break
++
+ # Re-write response file if needed.
+-if any(' ' in a for a in param_file_args):
++if param_file_args:
+   new_param_filename = param_filename + '.modified'
+   with open(new_param_filename, 'w') as f:
+     for param in param_file_args:

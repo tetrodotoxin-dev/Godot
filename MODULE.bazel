@@ -19,15 +19,47 @@ local_path_override(
 
 register_toolchains("@tetrodotoxin//toolchain:cc_toolchain_for_linux_x86_64")
 
-godot_cpp_repository = use_repo_rule("//gdextension/build:sdk.bzl", "godot_cpp_repository")
+godot_cpp_repository = use_repo_rule("//extension/build:sdk.bzl", "godot_cpp_repository")
 
 godot_cpp_repository(
     name = "godot_cpp",
-    build_file = "//gdextension/build:godot_cpp.BUILD.bazel",
-    generator = "//gdextension/build:generate.py",
-    profile = "//gdextension/build:profile.json",
+    build_file = "//extension/build:godot_cpp.BUILD.bazel",
+    generator = "//extension/build:generate.py",
+    profile = "//extension/build:profile.json",
 )
 
-fftw_repository = use_repo_rule("//imaging/cpu:sdk.bzl", "fftw_repository")
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-fftw_repository(name = "fftw_sdk")
+http_archive(
+    name = "pocketfft",
+    build_file = "//demo/imaging/cpu:pocketfft.BUILD.bazel",
+    sha256 = "2d90016da31a8cc1dd0ac0c89c1f2fb55df8f4ccc3f0386dcfbad09ac6d1c3ba",
+    strip_prefix = "pocketfft-c90e55b3d529f8efa40ed01a20de22405f45fc65",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/mreineck/pocketfft/tar.gz/c90e55b3d529f8efa40ed01a20de22405f45fc65"],
+)
+
+# The web target uses the upstream SDK toolchain rather than a second source
+# build graph. Native targets retain the existing Linux toolchain.
+bazel_dep(name = "emsdk", version = "6.0.10")
+git_override(
+    module_name = "emsdk",
+    commit = "a2b92777574c2feda07994cd4f1079a3dfc151f8",
+    patch_strip = 1,
+    patches = ["//extension/build:emsdk.patch"],
+    remote = "https://github.com/emscripten-core/emsdk.git",
+    strip_prefix = "bazel",
+)
+
+godot_cpp_repository(
+    name = "godot_cpp_web",
+    bits = "32",
+    build_file = "//extension/build:godot_cpp.BUILD.bazel",
+    generator = "//extension/build:generate.py",
+    profile = "//extension/build:profile.json",
+)
+
+# Godot's official Web template and its extensions share libc++ and runtime
+# symbols. Match the template SDK rather than selecting the newest compiler.
+emscripten_deps = use_extension("@emsdk//:emscripten_deps.bzl", "emscripten_deps")
+emscripten_deps.config(version = "4.0.20")

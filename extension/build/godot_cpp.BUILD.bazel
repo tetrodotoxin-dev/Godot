@@ -1,0 +1,28 @@
+# # Tetrodotoxin
+# Copyright (c) 2023-present Matt Kaes and contributors
+
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+config_setting(
+    name = "web",
+    constraint_values = ["@platforms//cpu:wasm32"],
+)
+
+cc_library(
+    name = "godot_cpp",
+    srcs = glob(["src/**/*.cpp", "gen/src/**/*.cpp"]),
+    hdrs = glob(["include/**/*.hpp", "include/**/*.inc", "gen/include/**/*.hpp", "gen/include/**/*.h"]),
+    includes = ["include", "gen/include", "gen/include/godot_cpp/gdextension"],
+    # This SDK's debug allocator assumes that the engine supplied array
+    # padding. Release bindings supply it themselves and can load in either
+    # the editor or a release engine, without relying on the host's build mode.
+    defines = ["GDEXTENSION"] + select({
+        ":web": ["WEB_ENABLED", "UNIX_ENABLED"],
+        "//conditions:default": ["LINUX_ENABLED", "UNIX_ENABLED", "THREADS_ENABLED"],
+    }),
+    # The upstream Wrapped lifecycle uses dynamic_cast during construction.
+    copts = ["-fvisibility=hidden", "-std=c++17", "-frtti", "-Wno-unused-parameter", "-Wno-error=deprecated-declarations"],
+    visibility = ["//visibility:public"],
+)
+
+exports_files(["LICENSE.md"])

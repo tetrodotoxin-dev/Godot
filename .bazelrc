@@ -16,3 +16,10 @@ build:release --copt=-DPERI_RELEASE
 build:cuda --define=godot_cuda=1
 test --test_output=errors
 run --run_in_cwd
+
+# WebAssembly uses its own native pointer and callable profile. SIMD is supplied
+# through Emscripten's intrinsic compatibility headers for the shared runtime.
+build:web --copt=-UPERI_LINUX
+build:web --cxxopt=-std=c++2c
+build:web --copt=-mavx2
+build:web --copt=-msimd128

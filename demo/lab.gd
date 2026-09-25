@@ -18,7 +18,7 @@ var initialized := false
 
 func _ready() -> void:
 	for width in [128, 256, 512, 1024, 2048]:
-		size_choice.add_item("%d × %d" % [width, width / 2], width)
+		size_choice.add_item("%d x %d" % [width, width / 2], width)
 	size_choice.select(0)
 	await get_tree().process_frame
 	compare()
@@ -44,6 +44,7 @@ func compare() -> void:
 	_refresh_choices()
 	if mode_choice.item_count == 0:
 		%Status.text = "NO IMAGE OPERATIONS AVAILABLE"
+		%Difference.hide()
 		%Elapsed.text = "Request %.3f ms" % ((Time.get_ticks_usec() - started) / 1000.0)
 		return
 	var operation: Dictionary = mode_choice.get_item_metadata(mode_choice.selected)
@@ -110,10 +111,13 @@ func _observe() -> void:
 			continue
 		for index in pixels.size():
 			maximum = maxi(maximum, absi(pixels[index] - reference_pixels[index]))
+	%Difference.hide()
 	if compared == 1:
 		%Status.text = "AVAILABLE FROM ONE RENDERER"
 	elif compared >= 2 and same_extent and maximum <= 1:
-		%Status.text = "%d RENDERERS MATCH  ·  %d / 255 max difference" % [compared, maximum]
+		%Status.text = "%d RENDERERS MATCH" % compared
+		%Difference.text = "%d / 255 max difference" % maximum
+		%Difference.show()
 	else:
 		%Status.text = "COMPARISON INCOMPLETE"
 	%Status.theme_type_variation = &"AccentLabel" if compared > 0 and same_extent and maximum <= 1 else &"WarningLabel"
@@ -151,7 +155,7 @@ func _refresh_choices() -> void:
 	ordered.sort()
 	kernel_choice.clear()
 	for size: int in ordered:
-		kernel_choice.add_item("%d × %d disk" % [size, size], size)
+		kernel_choice.add_item("%d x %d disk" % [size, size], size)
 		if size == diameter:
 			kernel_choice.select(kernel_choice.item_count - 1)
 	kernel_choice.disabled = selected.get("input", 0) != 1

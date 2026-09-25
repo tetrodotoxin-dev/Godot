@@ -24,5 +24,5 @@ static func overlay(width: int, height: int, step: int) -> PackedByteArray:
 	image.fill(Color.TRANSPARENT)
 	var side := maxi(height / 3, 1)
 	var x := (width / 5 + step * width / 7) % maxi(width - side, 1)
-	image.fill_rect(Rect2i(x, height / 3, side, side), Color(1.0, 0.14, 0.45, 0.65))
+	image.fill_rect(Rect2i(x, height / 3, side, side), Color.WHITE)
 	return image.get_data()
