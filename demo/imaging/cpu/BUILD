@@ -8,7 +8,10 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "cpu",
-    srcs = glob(["*.cpp"], exclude = ["module.cpp"]),
+    srcs = glob(
+        ["*.cpp"],
+        exclude = ["module.cpp"],
+    ),
     hdrs = glob(["*.hpp"]),
     copts = [
         "-fvisibility=hidden",
@@ -43,16 +46,10 @@ cc_shared_library(
     name = "cpu_provider",
     dynamic_deps = [
         "//demo:support",
-        "@tetrodotoxin//ttx:runtime",
     ],
-    shared_lib_name = select({
-        "//:web": "libcpu_provider.wasm",
-        "//conditions:default": "libcpu_provider.so",
-    }),
+    shared_lib_name = "libcpu_provider.so",
     user_link_flags = select({
         "//:web": [
-            "--oformat=wasm",
-            "-sSIDE_MODULE=1",
             "-fwasm-exceptions",
         ],
         "//conditions:default": [

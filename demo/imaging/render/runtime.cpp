@@ -182,7 +182,7 @@ class RenderInstance {
     observed.forgetful_resize(form.get_extent());
     Ttx::Semantic::Transport::Flow flow;
     const auto status = flow.connect(
-        Ttx::Semantic::Transport::Flow::reader(form),
+        Ttx::Semantic::Transport::Flow::consumer(form),
         Ttx::Semantic::Negotiation::Query(
             image.operations->pixels(image.source)));
     if (status != Ttx::Semantic::Transport::Flow::Status::Success) {

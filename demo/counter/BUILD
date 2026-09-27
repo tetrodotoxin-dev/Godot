@@ -17,9 +17,9 @@ cc_library(
     ],
     copts = ["-fvisibility=hidden"],
     deps = [
-        "//extension/contracts",
         "//demo/sampling/contracts",
-        "@tetrodotoxin//ttx:concept",
+        "//extension/contracts",
+        "@ttx",
     ],
 )
 
@@ -27,17 +27,10 @@ cc_shared_library(
     name = "counter_extension",
     dynamic_deps = [
         "//demo:support",
-        "@tetrodotoxin//ttx:runtime",
     ],
-    shared_lib_name = select({
-        "//:web": "libcounter_extension.wasm",
-        "//conditions:default": "libcounter_extension.so",
-    }),
+    shared_lib_name = "libcounter_extension.so",
     user_link_flags = select({
-        "//:web": [
-            "--oformat=wasm",
-            "-sSIDE_MODULE=1",
-        ],
+        "//:web": [],
         "//conditions:default": [
             "-Wl,-z,defs",
             "-Wl,-rpath,$ORIGIN",

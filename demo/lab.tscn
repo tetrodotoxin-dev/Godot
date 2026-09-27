@@ -47,18 +47,18 @@ theme_override_constants/separation = 8
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
-text = "TETRODOTOXIN  /  COMPUTE LAB"
+text = "Tetrodotoxin image lab"
 
 [node name="Title" type="Label" parent="Margin/Page/Heading" unique_id=573213287]
 layout_mode = 2
 theme_type_variation = &"TitleLabel"
 theme_override_font_sizes/font_size = 34
-text = "One renderer surface. Composable scenes."
+text = "Godot image rendering through different backends"
 
 [node name="Subtitle" type="Label" parent="Margin/Page/Heading" unique_id=1960824956]
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
-text = "Connect renderer nodes, policies and project CUDA source in the scene tree."
+text = "Compare C++, GDScript and CUDA implementations of the same image operations."
 
 [node name="Controls" type="HBoxContainer" parent="Margin/Page" unique_id=1182411800]
 layout_mode = 2
@@ -161,7 +161,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"MutedLabel"
-text = "Move the overlay. Only connected downstream renderer nodes refresh."
+text = "Move the overlay to update its connected renderers."
 
 [node name="MoveOverlay" type="Button" parent="Margin/Page/Interaction" unique_id=725861085]
 unique_name_in_owner = true

@@ -8,7 +8,10 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "cuda",
-    srcs = glob(["*.cpp"], exclude = ["module.cpp"]),
+    srcs = glob(
+        ["*.cpp"],
+        exclude = ["module.cpp"],
+    ),
     hdrs = glob(["*.hpp"]) + [":kernel_source"],
     copts = ["-fvisibility=hidden"],
     deps = [
@@ -45,7 +48,6 @@ cc_shared_library(
     name = "cuda_provider",
     dynamic_deps = [
         "//demo:support",
-        "@tetrodotoxin//ttx:runtime",
     ] + ["@ttx_cuda//cuda:plugin"],
     user_link_flags = [
         "-Wl,-z,defs",

@@ -1,9 +1,8 @@
 # # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
-load("@emsdk//emscripten_toolchain:wasm_rules.bzl", "wasm_cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -21,10 +20,13 @@ cc_library(
         "modules/*.hpp",
         "values/*.hpp",
     ]),
-    copts = ["-frtti", "-fvisibility=hidden"],
+    copts = [
+        "-frtti",
+        "-fvisibility=hidden",
+    ],
     deps = [
         "//extension/contracts",
-        "@tetrodotoxin//ttx:concept",
+        "@ttx",
     ] + select({
         "//:web": ["@godot_cpp_web//:godot_cpp"],
         "//conditions:default": ["@godot_cpp"],
@@ -34,11 +36,16 @@ cc_library(
 cc_binary(
     name = "libgodot_ttx.so",
     srcs = ["register.cpp"],
-    copts = ["-fvisibility=hidden", "-frtti"],
-    dynamic_deps = ["@tetrodotoxin//ttx:runtime"],
+    copts = [
+        "-fvisibility=hidden",
+        "-frtti",
+    ],
     linkopts = select({
-        "//:web": ["--oformat=wasm", "-sSIDE_MODULE=1"],
-        "//conditions:default": ["-Wl,-z,defs", "-Wl,-rpath,$ORIGIN"],
+        "//:web": [],
+        "//conditions:default": [
+            "-Wl,-z,defs",
+            "-Wl,-rpath,$ORIGIN",
+        ],
     }),
     linkshared = True,
     linkstatic = True,
@@ -47,23 +54,12 @@ cc_binary(
 
 genrule(
     name = "addon",
-    srcs = ["godot_ttx.gdextension", ":libgodot_ttx.so", "@tetrodotoxin//ttx:runtime"],
+    srcs = [
+        "godot_ttx.gdextension",
+        ":libgodot_ttx.so",
+        "@ttx//:build",
+        "@perimortem//:build",
+    ],
     outs = ["godot_ttx.tar"],
     cmd = "tar -chf $@ --transform='s|.*/||' $(SRCS)",
-)
-
-wasm_cc_binary(
-    name = "web_runtime",
-    cc_target = "@tetrodotoxin//ttx:runtime",
-    outputs = ["web/libttx_runtime.wasm"],
-    simd = "simd128",
-    threads = "off",
-)
-
-wasm_cc_binary(
-    name = "web",
-    cc_target = ":libgodot_ttx.so",
-    outputs = ["web/libgodot_ttx.wasm"],
-    simd = "simd128",
-    threads = "off",
 )

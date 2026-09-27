@@ -12,5 +12,5 @@ cc_library(
         "*.hpp",
         "*.h",
     ]),
-    deps = ["@tetrodotoxin//ttx:concept"],
+    deps = ["@ttx"],
 )

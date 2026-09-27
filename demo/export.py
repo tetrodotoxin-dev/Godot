@@ -56,8 +56,8 @@ def publish_sources(demo, engine_source, template):
     # credentials, build outputs and unrelated toolchain applications.
     roots = {
         'godot': ('extension', 'demo'),
-        'tetrodotoxin': ('perimortem', 'ttx', 'toolchain', 'validation'),
-        'cuda': ('cuda', 'build', 'validation'),
+        'ttx': ('data', 'semantic', 'concept', 'toolchain', 'validation'),
+        'cuda': ('cuda', 'build', 'toolchain', 'validation'),
     }
     root_files = {'.bazelrc', '.bazelversion', 'BUILD', 'BUILD.bazel',
                   'MODULE.bazel', 'MODULE.bazel.lock', 'LICENSE'}
@@ -113,7 +113,7 @@ def publish_sources(demo, engine_source, template):
     ])
     notices = {
         'Lab-MIT.txt': REPO / 'LICENSE',
-        'TTX-MIT.txt': REPO.parent / 'tetrodotoxin/LICENSE',
+        'TTX-MIT.txt': REPO.parent / 'ttx/LICENSE',
         'Godot-MIT.txt': engine_source / 'LICENSE.txt',
         'Godot.txt': engine_source / 'COPYRIGHT.txt',
         'Godot-CPP-MIT.txt': sdk_license,
@@ -132,11 +132,15 @@ def export_project(project, demo, template, modules, native_addon):
     addon.mkdir(parents=True)
     subprocess.run(['tar', '-xf', str(native_addon), '-C', str(addon)], check=True)
     for module in modules:
-        shutil.copyfile(module, addon / module.name)
+        destination = addon / 'web' / module.name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(module, destination)
 
     # Imports owns alias resolution on both hosts. This deployment publishes
     # CPU implementations. CUDA requests reach the ordinary unavailable result.
-    imports = {name: 'lib' + artifact + '.wasm' for name, artifact in {
+    # Godot exports shared libraries beside the engine, so runtime imports use
+    # their filenames rather than the staging project's web/ directory.
+    imports = {name: 'lib' + artifact + '.so' for name, artifact in {
         'counter': 'counter_extension', 'sampler': 'sampler_extension',
         'cpu': 'cpu_provider',
     }.items()}
@@ -149,7 +153,7 @@ platform="Web"
 runnable=true
 export_filter="all_resources"
 include_filter=""
-exclude_filter="addons/godot_ttx/*.so,preview.gif"
+exclude_filter="addons/godot_ttx/lib*.so,preview.gif"
 [preset.0.options]
 custom_template/release=''' + json.dumps(str(template)) + '''
 variant/extensions_support=true

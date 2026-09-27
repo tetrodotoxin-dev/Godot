@@ -18,6 +18,6 @@ cc_library(
     hdrs = ["function.hpp"],
     deps = [
         ":publication",
-        "@tetrodotoxin//ttx:concept",
+        "@ttx",
     ],
 )

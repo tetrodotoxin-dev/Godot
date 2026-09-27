@@ -10,9 +10,9 @@ cc_library(
     srcs = glob(["*.cpp"]),
     hdrs = glob(["*.hpp"]),
     deps = [
-        "//extension/contracts",
         "//demo/imaging/contracts",
         "//demo/sampling/contracts",
-        "@tetrodotoxin//ttx:concept",
+        "//extension/contracts",
+        "@ttx",
     ],
 )

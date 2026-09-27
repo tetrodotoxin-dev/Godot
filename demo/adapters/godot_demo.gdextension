@@ -6,14 +6,15 @@ reloadable = false
 [libraries]
 linux.debug.x86_64 = "./libgodot_demo.so"
 linux.release.x86_64 = "./libgodot_demo.so"
-web.debug.wasm32 = "./libgodot_demo.wasm"
-web.release.wasm32 = "./libgodot_demo.wasm"
+web.debug.wasm32 = "./web/libgodot_demo.so"
+web.release.wasm32 = "./web/libgodot_demo.so"
 
 [dependencies]
 web.wasm32 = {
-"./libttx_runtime.wasm": "",
-"./liblab_support.wasm": "",
-"./libcounter_extension.wasm": "",
-"./libsampler_extension.wasm": "",
-"./libcpu_provider.wasm": ""
+"./web/libperimortem.so": "",
+"./web/libttx.so": "",
+"./web/liblab_support.so": "",
+"./web/libcounter_extension.so": "",
+"./web/libsampler_extension.so": "",
+"./web/libcpu_provider.so": ""
 }

@@ -7,6 +7,3 @@ exports_files([
     "generate.py",
     "godot_cpp.BUILD.bazel",
 ])
-
-# Upstream rules use Clang 24 headers even when selecting the Godot SDK.
-exports_files(["emsdk.patch"])

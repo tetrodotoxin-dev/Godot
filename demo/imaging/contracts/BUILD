@@ -13,7 +13,7 @@ cc_library(
         "*.h",
     ]),
     deps = [
-        "@tetrodotoxin//perimortem:memory",
-        "@tetrodotoxin//ttx:concept",
+        "@perimortem",
+        "@ttx",
     ],
 )

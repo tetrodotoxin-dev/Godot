@@ -31,7 +31,7 @@ auto Imaging::Contracts::Pixels::read(image_object borrowed)
       *borrowed.operations->representation(borrowed.source);
   Ttx::Semantic::Transport::Flow flow;
   const auto connected = flow.connect(
-      Ttx::Semantic::Transport::Flow::reader(representation),
+      Ttx::Semantic::Transport::Flow::consumer(representation),
       Ttx::Semantic::Negotiation::Query(
           borrowed.operations->pixels(borrowed.source)));
   if (connected != Ttx::Semantic::Transport::Flow::Status::Success) {

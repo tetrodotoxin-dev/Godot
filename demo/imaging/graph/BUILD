@@ -11,6 +11,6 @@ cc_library(
     hdrs = glob(["*.hpp"]),
     deps = [
         "//demo/imaging/contracts",
-        "@tetrodotoxin//ttx:concept",
+        "@ttx",
     ],
 )

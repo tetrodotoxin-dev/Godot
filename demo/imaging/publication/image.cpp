@@ -7,7 +7,8 @@
 #include "perimortem/core/null_terminated.hpp"
 
 #include "ttx/data/form/compiler.hpp"
-#include "ttx/semantic/transport/block.hpp"
+#include "ttx/data/protocol/block/provider.hpp"
+#include "ttx/semantic/transport/flow.hpp"
 
 using namespace Godot::Demo;
 using namespace Perimortem;
@@ -59,31 +60,31 @@ auto Imaging::Publication::Image::get_abi() const -> image_object {
         [](const void* source, perimortem_uuid id,
            ttx_storage requested) -> ttx_binding_status {
           if (System::Uuid(id) !=
-              Ttx::Semantic::Transport::Block::Access::contract_id) {
+              Ttx::Semantic::Transport::Flow::block.provider) {
             return TTX_BINDING_UNSUPPORTED;
           }
 
-          static const ttx_block_access_operations table = {
+          static const ttx_block_provider_operations table = {
             [](const void* source) {
               return &static_cast<const Image*>(source)->representation;
             },
-            [](const void* source,
-               ttx_block_surface surface) -> ttx_data_status {
+            [](const void* source, ttx_storage surface) -> ttx_data_status {
               const auto error = static_cast<const Image*>(source)->read_pixels(
-                  Core::Access::Bytes(surface.data, surface.size));
+                  Core::Access::Bytes(
+                      surface.data, surface.representation->get_extent()));
               return error.is_empty() ? TTX_DATA_SUCCESS : TTX_DATA_IO_ERROR;
             },
           };
 
           return static_cast<ttx_binding_status>(
               Ttx::Semantic::Negotiation::Binding::provide<
-                  Ttx::Semantic::Transport::Block::Access>(
-                  ttx_block_access(source, &table),
+                  Ttx::Data::Protocol::Block::Provider>(
+                  ttx_block_provider(source, &table),
                   Ttx::Data::Form::Storage(requested)));
         },
         [](const void*, perimortem_uuid id) -> ttx_binding_status {
           return System::Uuid(id) ==
-                         Ttx::Semantic::Transport::Block::Access::contract_id
+                         Ttx::Semantic::Transport::Flow::block.provider
                      ? TTX_BINDING_SATISFIED
                      : TTX_BINDING_UNSUPPORTED;
         }};

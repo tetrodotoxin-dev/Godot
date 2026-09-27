@@ -17,10 +17,10 @@ cc_library(
     deps = [
         ":contracts",
         ":declarations",
-        "//extension/contracts",
         "//demo/sampling:function",
         "//demo/sampling/contracts",
-        "@tetrodotoxin//ttx:concept",
+        "//extension/contracts",
+        "@ttx",
     ],
 )
 
@@ -28,17 +28,10 @@ cc_shared_library(
     name = "sampler_extension",
     dynamic_deps = [
         "//demo:support",
-        "@tetrodotoxin//ttx:runtime",
     ],
-    shared_lib_name = select({
-        "//:web": "libsampler_extension.wasm",
-        "//conditions:default": "libsampler_extension.so",
-    }),
+    shared_lib_name = "libsampler_extension.so",
     user_link_flags = select({
-        "//:web": [
-            "--oformat=wasm",
-            "-sSIDE_MODULE=1",
-        ],
+        "//:web": [],
         "//conditions:default": [
             "-Wl,-z,defs",
             "-Wl,-rpath,$ORIGIN",
@@ -52,12 +45,12 @@ cc_library(
     name = "declarations",
     hdrs = ["method.hpp"],
     visibility = ["//visibility:public"],
-    deps = ["@tetrodotoxin//ttx:concept"],
+    deps = ["@ttx"],
 )
 
 cc_library(
     name = "contracts",
     hdrs = ["contracts.h"],
     visibility = ["//visibility:public"],
-    deps = ["@tetrodotoxin//ttx:data"],
+    deps = ["@ttx"],
 )
