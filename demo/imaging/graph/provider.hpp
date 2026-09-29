@@ -11,7 +11,8 @@
 
 #include "demo/imaging/contracts/provider.h"
 #include "demo/imaging/graph/vocabulary.hpp"
-#include "ttx/concept/modules/module.hpp"
+#include "ttx/concept/policies/borrowed.hpp"
+#include "ttx/semantic/negotiation/library.hpp"
 
 namespace Godot::Demo::Imaging::Graph {
 
@@ -20,32 +21,39 @@ namespace Godot::Demo::Imaging::Graph {
 // Every Image retains this owner, so factory state survives the Resources that
 // first selected it and the callable bindings borrowed by their Calls.
 //
-// Native loading also transfers a Module here. The factory is released before
-// that optional code owner is destroyed. A host factory instead retains its own
-// state and relies on the enclosing host's executable lifetime. Neither route
-// asks Data or Semantic to infer ownership from a successful binding.
+// Configured imports keep their code loaded for the host lifetime. Direct
+// native loading stores its Library here. Destruction releases the factory and
+// its acquired graph answer before returning that code reference.
 class Provider {
  public:
+  Provider(const Provider&) = delete;
+  auto operator=(const Provider&) -> Provider& = delete;
   // Admission consumes one factory reference. Its release operation owns the
-  // supplying state. Code that can unload independently travels with it as a
-  // Module, while a factory embedded in Godot uses the host lifetime.
+  // supplying state. A direct native caller supplies its code owner, while
+  // an embedded implementation can use the enclosing host lifetime.
   static auto adopt(
       image_provider owned,
       const Vocabulary& vocabulary,
-      Perimortem::Core::Option<Ttx::Concept::Modules::Module> module = {})
+      Perimortem::Core::Option<Ttx::Semantic::Negotiation::Library> module = {})
       -> Provider&;
 
   // The host resolves imports before image acquisition. Taking the acquired
   // module keeps its executable lifetime with the factory and its images,
   // even after the project's import configuration changes.
   static auto open(
-      Ttx::Concept::Modules::Module module,
+      Ttx::Semantic::Negotiation::Library module,
       const Vocabulary& contract,
       Perimortem::Memory::Allocator::Arena& errors)
       -> Perimortem::Utility::Result<Provider&, Perimortem::Core::View::Bytes>;
 
   static auto open(
       Perimortem::Core::View::Bytes path,
+      const Vocabulary& contract,
+      Perimortem::Memory::Allocator::Arena& errors)
+      -> Perimortem::Utility::Result<Provider&, Perimortem::Core::View::Bytes>;
+
+  static auto open(
+      Ttx::Semantic::Negotiation::Query subject,
       const Vocabulary& contract,
       Perimortem::Memory::Allocator::Arena& errors)
       -> Perimortem::Utility::Result<Provider&, Perimortem::Core::View::Bytes>;
@@ -64,10 +72,11 @@ class Provider {
   Provider(
       image_provider factory,
       const Vocabulary& contract,
-      Perimortem::Core::Option<Ttx::Concept::Modules::Module> module);
+      Perimortem::Core::Option<Ttx::Semantic::Negotiation::Library> module);
   ~Provider();
 
-  Perimortem::Core::Option<Ttx::Concept::Modules::Module> module;
+  Perimortem::Core::Option<Ttx::Semantic::Negotiation::Library> module;
+  Perimortem::Core::Option<Ttx::Concept::Policies::Borrowed> lifetime;
   image_provider factory;
   const Vocabulary& contract;
 };

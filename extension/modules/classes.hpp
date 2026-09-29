@@ -7,30 +7,27 @@
 
 #include "perimortem/memory/dynamic/vector.hpp"
 
+#include "extension/classes/class.hpp"
 #include "extension/modules/imports.hpp"
-#include "ttx/semantic/ownership/publication.hpp"
 
 namespace Godot::Extension::Modules {
 
-// Classes drives startup compilation and then owns only emitted terminals.
-// Each discovery publication ends before its class is registered. Imports
-// remains available to the independent runtime factories until all classes
-// and instances have been released during scene teardown.
+// Classes exports each configured declaration and owns the resulting Godot
+// registrations. It releases them before its import service closes the
+// libraries used by their constructors and runtime instances.
 class Classes {
  public:
-  explicit Classes(godot::Dictionary paths) : imports(paths) {}
+  Classes(const Classes&) = delete;
+  auto operator=(const Classes&) -> Classes& = delete;
+  Classes() = default;
   ~Classes();
   auto load(const godot::Array& configuration) -> void;
 
  private:
-  // Compiling one configured declaration transfers a prepared terminal into
-  // this lifetime owner. Discovery locals must die before publish is invoked.
   auto compile(const godot::Dictionary& configuration)
-      -> Perimortem::Utility::Result<
-          Ttx::Semantic::Ownership::Publication,
-          Perimortem::Core::View::Bytes>;
+      -> Perimortem::Core::Option<Perimortem::Core::View::Bytes>;
   Imports imports;
-  Perimortem::Memory::Dynamic::Vector<Ttx::Semantic::Ownership::Publication>
+  Perimortem::Memory::Dynamic::Vector<::Godot::Extension::Classes::Class*>
       terminals;
 };
 

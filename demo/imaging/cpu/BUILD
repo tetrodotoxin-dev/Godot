@@ -37,7 +37,7 @@ cc_library(
         "//demo/imaging/contracts",
         "//demo/imaging/cpu",
         "//demo/imaging/render",
-        "//demo/sampling:publication",
+        "//demo/sampling:provider",
         "//demo/sampling/cpu",
     ],
 )

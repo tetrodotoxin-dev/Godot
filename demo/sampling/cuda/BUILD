@@ -12,6 +12,6 @@ cc_library(
     copts = ["-fvisibility=hidden"],
     deps = [
         "//demo/imaging/cuda",
-        "//demo/sampling:publication",
+        "//demo/sampling:provider",
     ],
 )

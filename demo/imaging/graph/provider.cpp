@@ -8,7 +8,8 @@
 
 #include "demo/imaging/contracts/render.hpp"
 #include "ttx/concept/abstract.hpp"
-#include "ttx/concept/declarations/extensible.hpp"
+#include "ttx/concept/capabilities/borrow.hpp"
+#include "ttx/concept/policies/borrowed.hpp"
 
 using namespace Godot::Demo;
 using namespace Perimortem;
@@ -16,17 +17,20 @@ using namespace Perimortem;
 Imaging::Graph::Provider::Provider(
     image_provider factory,
     const Vocabulary& contract,
-    Core::Option<Ttx::Concept::Modules::Module> module)
+    Core::Option<Ttx::Semantic::Negotiation::Library> module)
     : module(Core::Data::take(module)), factory(factory), contract(contract) {}
 
 Imaging::Graph::Provider::~Provider() {
   factory.operations->release(factory.source);
+  if (lifetime) {
+    lifetime->release();
+  }
 }
 
 auto Imaging::Graph::Provider::adopt(
     image_provider owned,
     const Vocabulary& vocabulary,
-    Core::Option<Ttx::Concept::Modules::Module> module) -> Provider& {
+    Core::Option<Ttx::Semantic::Negotiation::Library> module) -> Provider& {
   static const Core::Object<>::Descriptor descriptor(
       sizeof(Provider), alignof(Provider),
       [](U8* value) { reinterpret_cast<Provider*>(value)->~Provider(); });
@@ -56,47 +60,53 @@ auto Imaging::Graph::Provider::create(
       factory.source, w, h, pixels.get_data(), pixels.get_size(), &output);
 }
 
-// Only the independently owned backend leaves Provider::open. The declaration
-// and emitted factory can both be released before any image is created. Copy
-// diagnostics inside that lifetime because their owner may be one of those
-// temporary publications.
-static auto open_backend(
-    Ttx::Concept::Declarations::Extensible declaration,
+auto Imaging::Graph::Provider::open(
+    Ttx::Semantic::Negotiation::Query subject,
+    const Vocabulary& vocabulary,
     Memory::Allocator::Arena& errors)
-    -> Utility::Result<image_provider, Core::View::Bytes> {
-  using Result = Utility::Result<image_provider, Core::View::Bytes>;
-  return declaration.emit_factory().visit(
-      [&](Ttx::Semantic::Ownership::Publication& factory) -> Result {
-        return factory.get_query().bind<Imaging::Contracts::Render>().visit(
-            [&](Imaging::Contracts::Render render) -> Result {
-              return render.open().visit(
-                  [](image_provider owned) -> Result { return owned; },
-                  [&](Core::View::Bytes error) -> Result {
-                    return errors.proxy(error);
+    -> Utility::Result<Provider&, Core::View::Bytes> {
+  using Result = Utility::Result<Provider&, Core::View::Bytes>;
+  using namespace Ttx::Semantic::Negotiation;
+  if (subject.supports<Imaging::Contracts::Render>() ==
+      Binding::Status::Unknown) {
+    const auto selected = subject.bind<Ttx::Concept::Abstract>().visit(
+        [](Ttx::Concept::Abstract root) {
+          return root.resolve_concept("Imaging"_view)
+              .resolve_concept("Render"_view)
+              .get_query();
+        },
+        [](Binding::Failure) { return Query(); });
+    subject = selected;
+  }
+  return subject.bind<Ttx::Concept::Capabilities::Borrow>().visit(
+      [&](Ttx::Concept::Capabilities::Borrow policy) -> Result {
+        return policy.borrow().visit(
+            [&](Ttx::Concept::Policies::Borrowed acquired) -> Result {
+              return acquired.bind<Imaging::Contracts::Render>().visit(
+                  [&](Imaging::Contracts::Render render) -> Result {
+                    return render.open().visit(
+                        [&](image_provider backend) -> Result {
+                          auto& provider = adopt(backend, vocabulary);
+                          provider.lifetime = acquired;
+                          return provider;
+                        },
+                        [&](Core::View::Bytes error) -> Result {
+                          const auto message = errors.proxy(error);
+                          acquired.release();
+                          return message;
+                        });
+                  },
+                  [&](Binding::Failure) -> Result {
+                    acquired.release();
+                    return "Imported subject did not supply Render."_view;
                   });
             },
-            [](Ttx::Semantic::Negotiation::Binding::Failure) -> Result {
-              return "Render factory does not supply persistent images."_view;
+            [](Binding::Failure) -> Result {
+              return "Render provider could not retain its runtime."_view;
             });
       },
-      [](Ttx::Data::Status) -> Result {
-        return "Render could not emit an independent factory."_view;
-      });
-}
-
-static auto find_backend(
-    Ttx::Concept::Abstract root,
-    Memory::Allocator::Arena& errors)
-    -> Utility::Result<image_provider, Core::View::Bytes> {
-  using Result = Utility::Result<image_provider, Core::View::Bytes>;
-  const auto declaration =
-      root.resolve_concept("Imaging"_view).resolve_concept("Render"_view);
-  return declaration.bind<Ttx::Concept::Declarations::Extensible>().visit(
-      [&](Ttx::Concept::Declarations::Extensible extensible) -> Result {
-        return open_backend(extensible, errors);
-      },
-      [](Ttx::Semantic::Negotiation::Binding::Failure) -> Result {
-        return "Module does not expose an Extensible Render."_view;
+      [](Binding::Failure) -> Result {
+        return "Render provider did not supply Borrow."_view;
       });
 }
 
@@ -106,30 +116,38 @@ auto Imaging::Graph::Provider::open(
     Memory::Allocator::Arena& errors)
     -> Utility::Result<Provider&, Core::View::Bytes> {
   using Result = Utility::Result<Provider&, Core::View::Bytes>;
-  return Ttx::Concept::Modules::Module::load(path, errors)
+  return Ttx::Semantic::Negotiation::Library::open(path, errors)
       .visit(
-          [&](Ttx::Concept::Modules::Module& module) -> Result {
-            return open(Core::Data::take(module), vocabulary, errors);
+          [&](Ttx::Semantic::Negotiation::Library& library) -> Result {
+            return open(Core::Data::take(library), vocabulary, errors);
           },
           [](Core::View::Bytes error) -> Result { return error; });
 }
 
 auto Imaging::Graph::Provider::open(
-    Ttx::Concept::Modules::Module module,
+    Ttx::Semantic::Negotiation::Library library,
     const Vocabulary& vocabulary,
     Memory::Allocator::Arena& errors)
     -> Utility::Result<Provider&, Core::View::Bytes> {
-  using Result = Utility::Result<Provider&, Core::View::Bytes>;
-  return module.open().visit(
-      [&](Ttx::Concept::Modules::Module::Acquisition& discovery) -> Result {
-        return find_backend(discovery, errors)
-            .visit(
-                [&](image_provider owned) -> Result {
-                  return adopt(owned, vocabulary, Core::Data::take(module));
-                },
-                [](Core::View::Bytes error) -> Result { return error; });
-      },
-      [](Ttx::Data::Status) -> Result {
-        return "Module discovery could not open."_view;
-      });
+  using namespace Ttx::Semantic::Negotiation;
+  Core::Option<Provider&> result;
+  Core::View::Bytes error = "Library did not supply a rendering Query."_view;
+  auto receive = [&](Query subject) {
+    return open(subject, vocabulary, errors)
+        .visit(
+            [&](Provider& value) {
+              value.module = library;
+              result = value;
+              return Binding::Status::Satisfied;
+            },
+            [&](Core::View::Bytes failure) {
+              error = failure;
+              return Binding::Status::Rejected;
+            });
+  };
+  if (library.visit(Query(), Receiver(receive)) != Binding::Status::Satisfied ||
+      !result) {
+    return error;
+  }
+  return *result;
 }

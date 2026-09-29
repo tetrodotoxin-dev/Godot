@@ -5,12 +5,16 @@
 #define COUNTER_RUNTIME_H
 
 #include "demo/counter/counter.h"
-#include "ttx/semantic/ownership/publication.h"
+#include "ttx/concept/abstract.h"
 #include "ttx/data/status.h"
 
 // Instances own their value and scene observations. The factory borrows no
 // declarations, so it remains usable after the export namespace is released.
 
-ttx_data_status counter_emit_factory(ttx_publication* output);
+ttx_binding_status counter_create(
+    const void* source,
+    ttx_abstract arguments,
+    void* receiver,
+    void (*receive)(void*, ttx_abstract));
 
 #endif

@@ -1,12 +1,10 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-#include "demo/sampling/class/runtime.hpp"
-
-#include "perimortem/core/bibliotheca.hpp"
-
 #include "demo/sampling/class/contracts.h"
+#include "demo/sampling/class/declaration.hpp"
 #include "demo/sampling/class/sampler.hpp"
+#include "ttx/concept/capabilities/import.hpp"
 #include "ttx/semantic/realization/invocation.hpp"
 
 using namespace Godot::Demo;
@@ -18,9 +16,26 @@ using namespace Perimortem;
 struct RuntimeInstance {
   Sampling::Class::Sampler sampler;
   ttx_invocation calls[3];
+  mutable Count references = 1;
+  auto get_data() const -> Core::View::Bytes { return Core::View::Bytes(); }
+  auto supports(System::Uuid id) const
+      -> Ttx::Semantic::Negotiation::Binding::Status;
+  auto bind_interface(System::Uuid id, Ttx::Data::Form::Storage target) const
+      -> Ttx::Semantic::Negotiation::Binding::Status;
+  auto borrow() const -> Utility::Result<
+      Ttx::Concept::Policies::Borrowed,
+      Ttx::Semantic::Negotiation::Binding::Failure> {
+    ++references;
+    return Ttx::Concept::Policies::Borrowed::provide(*this);
+  }
+  auto release() const -> void {
+    if (!--references) {
+      delete this;
+    }
+  }
 
   RuntimeInstance(
-      Ttx::Concept::Modules::Import imports,
+      Ttx::Concept::Capabilities::Import imports,
       Ttx::Semantic::Negotiation::Query host)
       : sampler(imports, host),
         calls{
@@ -61,94 +76,60 @@ struct RuntimeInstance {
         } {}
 };
 
-// The method UUID selects this instance's record. Generic binding checks the
-// actual invocation ABI. Invocation checks its declared payload forms once.
-static auto bind_instance(
-    const void* source,
-    perimortem_uuid id,
-    ttx_storage requested) -> ttx_binding_status {
-  if (id.high != SAMPLER_METHOD_HIGH || id.low < SAMPLER_METHOD_LOW ||
-      id.low >= SAMPLER_METHOD_LOW + 3) {
-    return TTX_BINDING_UNSUPPORTED;
+// Runtime bindings select the invocation records once for each Godot instance.
+// Repeated method calls use those records while the instance holds its borrow.
+auto RuntimeInstance::supports(System::Uuid id) const
+    -> Ttx::Semantic::Negotiation::Binding::Status {
+  using namespace Ttx::Concept;
+  using namespace Ttx::Semantic::Negotiation;
+  return id == Capabilities::Borrow::contract_id ||
+                 id == Policies::Borrowed::contract_id ||
+                 (static_cast<perimortem_uuid>(id).high ==
+                      SAMPLER_METHOD_HIGH &&
+                  static_cast<perimortem_uuid>(id).low >= SAMPLER_METHOD_LOW &&
+                  static_cast<perimortem_uuid>(id).low < SAMPLER_METHOD_LOW + 3)
+             ? Binding::Status::Satisfied
+             : Binding::Status::Unknown;
+}
+auto RuntimeInstance::bind_interface(
+    System::Uuid id,
+    Ttx::Data::Form::Storage target) const
+    -> Ttx::Semantic::Negotiation::Binding::Status {
+  using namespace Ttx::Concept;
+  using namespace Ttx::Semantic::Negotiation;
+  if (id == Capabilities::Borrow::contract_id) {
+    return Binding::provide<Capabilities::Borrow>(
+        Capabilities::Borrow::provide(*this).get_abi(), target);
   }
-
-  const auto& call = static_cast<const RuntimeInstance*>(source)
-                         ->calls[id.low - SAMPLER_METHOD_LOW];
-  return ttx_binding_provide(ttx_invocation_representation(), &call, requested);
+  if (id == Policies::Borrowed::contract_id) {
+    return Binding::provide<Policies::Borrowed>(
+        Policies::Borrowed::provide(*this).get_abi(), target);
+  }
+  if (static_cast<perimortem_uuid>(id).high != SAMPLER_METHOD_HIGH ||
+      static_cast<perimortem_uuid>(id).low < SAMPLER_METHOD_LOW ||
+      static_cast<perimortem_uuid>(id).low >= SAMPLER_METHOD_LOW + 3) {
+    return Binding::Status::Unknown;
+  }
+  return static_cast<Binding::Status>(ttx_binding_provide(
+      ttx_invocation_representation(),
+      &calls[static_cast<perimortem_uuid>(id).low - SAMPLER_METHOD_LOW],
+      target.get_abi()));
 }
 
-static auto supports_instance(const void*, perimortem_uuid id)
-    -> ttx_binding_status {
-  return id.high == SAMPLER_METHOD_HIGH && id.low >= SAMPLER_METHOD_LOW &&
-                 id.low < SAMPLER_METHOD_LOW + 3
-             ? TTX_BINDING_SATISFIED
-             : TTX_BINDING_UNSUPPORTED;
-}
-
-auto Sampling::Class::Runtime::get_query() const -> ttx_semantic_query {
-  return {
-    this,
-    [](const void* source, perimortem_uuid id,
-       ttx_storage requested) -> ttx_binding_status {
-      if (System::Uuid(id) != Ttx::Semantic::Ownership::Factory::contract_id) {
-        return TTX_BINDING_UNSUPPORTED;
-      }
-
-      static const ttx_factory_operations operations = {
-        [](const void* source, ttx_publication* output) -> ttx_data_status {
-          const auto& factory = *static_cast<const Runtime*>(source);
-          auto memory = Core::Bibliotheca::check_out(sizeof(RuntimeInstance));
-          auto* instance = new (memory.ptr, Core::Placement::Construct)
-              RuntimeInstance(factory.imports, factory.host);
-          *output = {
-            {instance, bind_instance, supports_instance},
-            [](const void* source) {
-              auto* instance = const_cast<RuntimeInstance*>(
-                  static_cast<const RuntimeInstance*>(source));
-              instance->~RuntimeInstance();
-              Core::Bibliotheca::remit(reinterpret_cast<U8*>(instance));
-            }};
-          return TTX_DATA_SUCCESS;
-        },
-      };
-      const ttx_factory api = {source, &operations};
-      return ttx_binding_provide(ttx_factory_representation(), &api, requested);
-    },
-    [](const void*, perimortem_uuid id) -> ttx_binding_status {
-      return System::Uuid(id) == Ttx::Semantic::Ownership::Factory::contract_id
-                 ? TTX_BINDING_SATISFIED
-                 : TTX_BINDING_UNSUPPORTED;
-    }};
-}
-
-auto Sampling::Class::Runtime::emit(Ttx::Semantic::Negotiation::Query host)
-    -> Utility::
-        Result<Ttx::Semantic::Ownership::Publication, Ttx::Data::Status> {
-  using Result =
-      Utility::Result<Ttx::Semantic::Ownership::Publication, Ttx::Data::Status>;
-  return host.bind<Ttx::Concept::Modules::Import>().visit(
-      [&](Ttx::Concept::Modules::Import imports) -> Result {
-        auto memory = Core::Bibliotheca::check_out(sizeof(Runtime));
-        auto* runtime =
-            new (memory.ptr, Core::Placement::Construct) Runtime(imports, host);
-        return Ttx::Semantic::Ownership::Publication(
-            {runtime->get_query(), [](const void* source) {
-               auto* runtime =
-                   const_cast<Runtime*>(static_cast<const Runtime*>(source));
-               runtime->~Runtime();
-               Core::Bibliotheca::remit(reinterpret_cast<U8*>(runtime));
-             }});
+auto Sampling::Class::Declaration::create(
+    Ttx::Concept::Abstract,
+    void* receiver,
+    void (*receive)(void*, ttx_abstract)) const
+    -> Ttx::Semantic::Negotiation::Binding::Status {
+  using namespace Ttx::Semantic::Negotiation;
+  return host.bind<Ttx::Concept::Capabilities::Import>().visit(
+      [&](Ttx::Concept::Capabilities::Import imports) {
+        auto* instance = new RuntimeInstance(imports, host);
+        receive(receiver, Ttx::Concept::Abstract::provide(*instance).get_abi());
+        instance->release();
+        return Binding::Status::Satisfied;
       },
-      [](Ttx::Semantic::Negotiation::Binding::Failure failure) -> Result {
-        switch (failure) {
-        case Ttx::Semantic::Negotiation::Binding::Failure::Unsupported:
-          return Ttx::Data::Status::Unsupported;
-        case Ttx::Semantic::Negotiation::Binding::Failure::Pending:
-          return Ttx::Data::Status::Busy;
-        case Ttx::Semantic::Negotiation::Binding::Failure::Rejected:
-          return Ttx::Data::Status::Denied;
-        }
-
-        return Ttx::Data::Status::Invalid;
+      [](Binding::Failure failure) {
+        return static_cast<Binding::Status>(failure);
       });
 }

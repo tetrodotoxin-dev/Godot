@@ -10,11 +10,11 @@ using namespace Perimortem;
 
 auto Godot::Extension::Classes::Instance::create(
     Class& type,
-    Ttx::Semantic::Ownership::Publication publication)
+    Ttx::Concept::Policies::Borrowed publication)
     -> Utility::Result<Instance*, Ttx::Data::Status> {
   // A registered class promises that every instance can supply these methods.
-  // Fulfill all slots before attaching an instance to Godot so a late refusal
-  // releases the runtime publication without exposing a partly usable object.
+  // Bind each method before attaching the instance to Godot. If a provider
+  // declines a required method, return its subject through the lending policy.
   Memory::Dynamic::Vector<Ttx::Semantic::Realization::Invocation> bindings;
   const auto methods = type.get_methods();
   for (Count index = 0; index < methods.get_size(); ++index) {
@@ -25,40 +25,38 @@ auto Godot::Extension::Classes::Instance::create(
     const auto status = invocation.connect(
         publication.get_query(), method.get_contract(), input, output);
     if (status != Ttx::Semantic::Negotiation::Binding::Status::Satisfied) {
+      publication.release();
       return Ttx::Data::Status::Incompatible;
     }
 
     bindings.emplace(Core::Data::take(invocation));
   }
 
-  // Computation alone does not imply scene behavior. Only Node instances ask
-  // for this optional policy, and a provisional answer cannot fall through to
-  // an underlying implementation that might expose more than was permitted.
+  // An instance can offer Lifecycle alongside its methods. Accepted support
+  // selects those callbacks, and binding establishes their concrete API before
+  // Godot can deliver scene notifications.
   Core::Option<::Godot::Extension::Contracts::Lifecycle> lifecycle;
-  if (type.is_node()) {
+  if (type.is_node() &&
+      publication.supports<::Godot::Extension::Contracts::Lifecycle>() ==
+          Ttx::Semantic::Negotiation::Binding::Status::Satisfied) {
     auto status =
-        publication.get_query()
-            .bind<::Godot::Extension::Contracts::Lifecycle>()
-            .visit(
-                [&](::Godot::Extension::Contracts::Lifecycle value) {
-                  lifecycle = value;
-                  return Ttx::Data::Status::Success;
-                },
-                [](Ttx::Semantic::Negotiation::Binding::Failure failure) {
-                  return failure == Ttx::Semantic::Negotiation::Binding::
-                                        Failure::Unsupported
-                             ? Ttx::Data::Status::Success
-                             : Ttx::Data::Status::Denied;
-                });
+        publication.bind<::Godot::Extension::Contracts::Lifecycle>().visit(
+            [&](::Godot::Extension::Contracts::Lifecycle value) {
+              lifecycle = value;
+              return Ttx::Data::Status::Success;
+            },
+            [](Ttx::Semantic::Negotiation::Binding::Failure) {
+              return Ttx::Data::Status::Incompatible;
+            });
     if (status != Ttx::Data::Status::Success) {
+      publication.release();
       return status;
     }
   }
 
   auto memory = Core::Bibliotheca::check_out(sizeof(Instance));
-  return new (memory.ptr, Core::Placement::Construct) Instance(
-      type, Core::Data::take(publication), Core::Data::take(bindings),
-      lifecycle);
+  return new (memory.ptr, Core::Placement::Construct)
+      Instance(type, publication, Core::Data::take(bindings), lifecycle);
 }
 
 auto Godot::Extension::Classes::Instance::notify(S32 notification) -> void {

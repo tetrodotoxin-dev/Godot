@@ -8,6 +8,7 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include "extension/classes/instance.hpp"
+#include "ttx/semantic/realization/invocation.h"
 
 using namespace Godot::Extension;
 using namespace Perimortem;
@@ -30,9 +31,13 @@ Godot::Extension::Classes::Method::Method(
 
 auto Godot::Extension::Classes::Method::compile(
     Core::View::Bytes name,
-    Ttx::Concept::Declarations::Callable::Description description,
+    Ttx::Concept::Capabilities::Callable::Description description,
     U32 index) -> Utility::Result<Method, Ttx::Data::Status> {
   using Result = Utility::Result<Method, Ttx::Data::Status>;
+  if (!description.get_representation().compatible(
+          *ttx_invocation_representation())) {
+    return Ttx::Data::Status::Unsupported;
+  }
   return Godot::Extension::Values::Frame::compile(description.get_inputs())
       .visit(
           [&](Godot::Extension::Values::Frame& inputs) -> Result {

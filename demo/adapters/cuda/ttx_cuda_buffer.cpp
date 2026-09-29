@@ -18,19 +18,23 @@ auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::_bind_methods() -> void {
 }
 
 auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::adopt(
-    Ttx::Concept::Modules::Module module,
-    Ttx::Semantic::Ownership::Publication publication)
-    -> godot::Ref<TtxCudaBuffer> {
+    Ttx::Concept::Policies::Borrowed subject) -> godot::Ref<TtxCudaBuffer> {
+  using namespace Ttx::Semantic::Negotiation;
   godot::Ref<TtxCudaBuffer> result;
-  publication.get_query().bind<::Cuda::Contracts::Buffer>().visit(
-      [&](::Cuda::Contracts::Buffer buffer) {
+  subject.bind<::Cuda::Contracts::Buffer>().visit(
+      [&](::Cuda::Contracts::Buffer api) {
         result.instantiate();
-        result->module = Core::Data::take(module);
-        result->owner = Core::Data::take(publication);
-        result->buffer = buffer;
+        result->owner = subject;
+        result->buffer = api;
       },
-      [](Ttx::Semantic::Negotiation::Binding::Failure) {});
+      [&](Binding::Failure) { subject.release(); });
   return result;
+}
+
+Godot::Demo::Adapters::Cuda::TtxCudaBuffer::~TtxCudaBuffer() {
+  if (owner) {
+    owner->release();
+  }
 }
 
 auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::get_address() const -> U64 {

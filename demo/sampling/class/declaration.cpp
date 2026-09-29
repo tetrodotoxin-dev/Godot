@@ -7,6 +7,8 @@
 
 #include "demo/sampling/class/contracts.h"
 #include "extension/contracts/scalar.hpp"
+#include "ttx/concept/policies/none.h"
+#include "ttx/semantic/realization/invocation.h"
 
 using namespace Godot::Demo;
 using namespace Perimortem;
@@ -36,13 +38,14 @@ static auto description(U32 index) -> ttx_callable_description {
     {error.get_abstract().get_abi(), 0},
   };
   const auto* arguments = index == 0 ? configure : count;
-  return {
-    {SAMPLER_METHOD_HIGH, SAMPLER_METHOD_LOW + index},
-    {sampler_input_representation(index), arguments,
-     index == 0   ? 1U
-     : index == 1 ? 3U
-                  : 0U},
-    {sampler_output_representation(index), &results[index], 1}};
+  return ttx_callable_description(
+      {SAMPLER_METHOD_HIGH, SAMPLER_METHOD_LOW + index},
+      ttx_invocation_representation(),
+      {sampler_input_representation(index), arguments,
+       index == 0   ? 1U
+       : index == 1 ? 3U
+                    : 0U},
+      {sampler_output_representation(index), &results[index], 1});
 }
 
 Sampling::Class::Declaration::Declaration(
@@ -58,39 +61,55 @@ auto Sampling::Class::Declaration::get_data() const -> Core::View::Bytes {
   return "Sampler"_view;
 }
 
+auto Sampling::Class::Declaration::borrow() const -> Utility::Result<
+    Ttx::Concept::Policies::Borrowed,
+    Ttx::Semantic::Negotiation::Binding::Failure> {
+  auto* retained = references ? this : new Declaration(host);
+  ++retained->references;
+  return Ttx::Concept::Policies::Borrowed::provide(*retained);
+}
+auto Sampling::Class::Declaration::release() const -> void {
+  if (!--references) {
+    delete this;
+  }
+}
 auto Sampling::Class::Declaration::supports(System::Uuid id) const
     -> Ttx::Semantic::Negotiation::Binding::Status {
-  using Ttx::Semantic::Negotiation::Binding::Status;
-  return id == Ttx::Concept::Declarations::Extensible::contract_id
-             ? Status::Satisfied
-             : Status::Unsupported;
+  using namespace Ttx::Concept;
+  using namespace Ttx::Semantic::Negotiation;
+  return id == Capabilities::Borrow::contract_id ||
+                 id == Capabilities::Create::contract_id ||
+                 (references && id == Policies::Borrowed::contract_id)
+             ? Binding::Status::Satisfied
+             : Binding::Status::Unknown;
 }
-
 auto Sampling::Class::Declaration::bind_interface(
-    System::Uuid requested,
+    System::Uuid id,
     Ttx::Data::Form::Storage target) const
     -> Ttx::Semantic::Negotiation::Binding::Status {
-  if (requested == Ttx::Concept::Declarations::Extensible::contract_id) {
-    static const ttx_extensible_operations operations = {
-      [](const void* source, ttx_publication* output) -> ttx_data_status {
-        return Runtime::emit(static_cast<const Declaration*>(source)->host)
-            .visit(
-                [&](Ttx::Semantic::Ownership::Publication& factory)
-                    -> ttx_data_status {
-                  *output = factory.take();
-                  return TTX_DATA_SUCCESS;
-                },
-                [](Ttx::Data::Status status) {
-                  return static_cast<ttx_data_status>(status);
-                });
-      },
-    };
-    return Ttx::Semantic::Negotiation::Binding::provide<
-        Ttx::Concept::Declarations::Extensible>(
-        ttx_extensible(this, &operations), target);
+  using namespace Ttx::Concept;
+  using namespace Ttx::Semantic::Negotiation;
+  if (id == Capabilities::Borrow::contract_id) {
+    return Binding::provide<Capabilities::Borrow>(
+        Capabilities::Borrow::provide(*this).get_abi(), target);
   }
-
-  return Ttx::Semantic::Negotiation::Binding::Status::Unsupported;
+  if (references && id == Policies::Borrowed::contract_id) {
+    return Binding::provide<Policies::Borrowed>(
+        Policies::Borrowed::provide(*this).get_abi(), target);
+  }
+  if (id == Capabilities::Create::contract_id) {
+    static const ttx_create_ops operations = ttx_create_ops(
+        *Abstract::provide(*this).get_abi().operations,
+        [](const void* source, ttx_abstract arguments, void* receiver,
+           void (*receive)(void*, ttx_abstract)) {
+          return static_cast<ttx_binding_status>(
+              static_cast<const Declaration*>(source)->create(
+                  Abstract(arguments), receiver, receive));
+        });
+    return Binding::provide<Capabilities::Create>(
+        ttx_create(this, &operations), target);
+  }
+  return Binding::Status::Unknown;
 }
 
 auto Sampling::Class::Declaration::resolve_concept(Core::View::Bytes name) const

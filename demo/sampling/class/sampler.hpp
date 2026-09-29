@@ -6,7 +6,7 @@
 #include "perimortem/memory/dynamic/bytes.hpp"
 
 #include "demo/sampling/function.hpp"
-#include "ttx/concept/modules/import.hpp"
+#include "ttx/concept/capabilities/import.hpp"
 
 namespace Godot::Demo::Sampling::Class {
 
@@ -17,7 +17,7 @@ namespace Godot::Demo::Sampling::Class {
 class Sampler {
  public:
   Sampler(
-      Ttx::Concept::Modules::Import imports,
+      Ttx::Concept::Capabilities::Import imports,
       Ttx::Semantic::Negotiation::Query host)
       : imports(imports), host(host) {}
   auto configure(Perimortem::Core::View::Bytes provider) -> bool;
@@ -27,7 +27,7 @@ class Sampler {
   }
 
  private:
-  Ttx::Concept::Modules::Import imports;
+  Ttx::Concept::Capabilities::Import imports;
   Ttx::Semantic::Negotiation::Query host;
   Perimortem::Core::Option<Godot::Demo::Sampling::Function> function;
   Perimortem::Memory::Dynamic::Bytes error;

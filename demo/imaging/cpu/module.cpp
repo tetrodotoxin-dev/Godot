@@ -1,13 +1,12 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-#include "demo/imaging/render/module.hpp"
-
 #include "demo/imaging/contracts/provider.h"
 #include "demo/imaging/cpu/image.hpp"
+#include "demo/imaging/render/runtime.hpp"
 #include "demo/sampling/cpu/samples.h"
-#include "demo/sampling/publication.hpp"
-#include "ttx/concept/modules/module.h"
+#include "demo/sampling/provider.hpp"
+#include "ttx/semantic/negotiation/library.h"
 
 using namespace Godot::Demo;
 using namespace Perimortem;
@@ -34,15 +33,14 @@ static auto images(image_provider* output) -> image_error {
   return {};
 }
 
-static auto samples(ttx_publication* output) -> ttx_data_status {
+static auto samples(ttx_query_receiver receive) -> ttx_binding_status {
   static const sample_operations operations = {godot_cpu_samples};
-  static const Sampling::Publication publication(
-      nullptr, operations, [](const void*) {});
-  *output = publication.get_publication();
-  return TTX_DATA_SUCCESS;
+  static const Sampling::Provider publication(
+      nullptr, operations, [](const void*) {}, [](const void*) {});
+  return receive.receive(receive.source, publication.get_query());
 }
 
-PERIMORTEM_C __attribute__((visibility("default"))) ttx_data_status
-    ttx_module_open(ttx_semantic_query, ttx_module_acquisition* output) {
-  return Imaging::Render::Module::open(images, samples, output);
+PERIMORTEM_C __attribute__((visibility("default"))) ttx_binding_status
+    ttx_query(ttx_semantic_query, ttx_query_receiver receive) {
+  return Imaging::Render::Runtime::visit(images, samples, receive);
 }

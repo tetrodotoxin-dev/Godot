@@ -3,40 +3,35 @@
 
 #pragma once
 
-#include "extension/contracts/gd_class.hpp"
-#include "ttx/concept/abstract.hpp"
-#include "ttx/concept/modules/module.hpp"
-#include "ttx/semantic/ownership/publication.hpp"
+#include "extension/classes/class.hpp"
+#include "ttx/concept/capabilities/export.hpp"
 
 namespace Godot::Extension::Classes {
 
-// GDClass interprets a class declaration through Godot's exposure policy. Its
-// own binding adds emission while other questions still reach the encountered
-// Abstract, preserving any restrictions that object already carries. Godot
-// names and native bases come from host configuration rather than the provider.
-//
-// This object is temporary compiler state. Emission copies registration facts
-// and retains an independent runtime factory and module. A resulting Class
-// never calls back into this policy or its source graph.
+// GDClass supplies Export under a configured Godot name and native base. It
+// copies the supported method descriptions and retains their construction
+// capability before registration. The resulting Class answers its own lifetime
+// questions and no longer consults the offered graph.
 class GDClass {
  public:
   GDClass(
-      Ttx::Concept::Abstract subject,
-      const Ttx::Concept::Modules::Module& module,
+      Perimortem::Memory::Dynamic::Vector<Class*>& registrations,
       Perimortem::Core::View::Bytes name,
       Perimortem::Core::View::Bytes base)
-      : subject(subject), module(module), name(name), base(base) {}
-  auto get_interface() const -> Ttx::Concept::Abstract;
+      : registrations(registrations), name(name), base(base) {}
+  auto get_data() const -> Perimortem::Core::View::Bytes { return name; }
+  auto supports(Perimortem::System::Uuid id) const
+      -> Ttx::Semantic::Negotiation::Binding::Status;
+  auto bind_interface(
+      Perimortem::System::Uuid id,
+      Ttx::Data::Form::Storage target) const
+      -> Ttx::Semantic::Negotiation::Binding::Status;
+  auto expose(Ttx::Concept::Abstract subject) const
+      -> Ttx::Semantic::Negotiation::Binding::Status;
   auto get_error() const -> Perimortem::Core::View::Bytes { return error; }
 
  private:
-  // Emission uses this private policy's configuration and writes its
-  // diagnostic. Keeping it here avoids publishing mutable compiler state as
-  // another API.
-  auto emit() const -> Perimortem::Utility::
-      Result<Ttx::Semantic::Ownership::Publication, Ttx::Data::Status>;
-  Ttx::Concept::Abstract subject;
-  const Ttx::Concept::Modules::Module& module;
+  Perimortem::Memory::Dynamic::Vector<Class*>& registrations;
   Perimortem::Core::View::Bytes name;
   Perimortem::Core::View::Bytes base;
   mutable Perimortem::Core::View::Bytes error;

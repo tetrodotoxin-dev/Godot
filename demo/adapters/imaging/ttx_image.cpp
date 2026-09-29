@@ -14,13 +14,13 @@
 #include "perimortem/core/null_terminated.hpp"
 
 #include "demo/adapters/imaging/scripts/factory.hpp"
+#include "demo/adapters/imports.hpp"
 #include "demo/imaging/contracts/kernel.hpp"
 #include "demo/imaging/contracts/offers.hpp"
 #include "demo/imaging/contracts/pixels.hpp"
 #include "demo/imaging/graph/kernel.hpp"
 #include "demo/imaging/graph/observation.hpp"
 #include "demo/imaging/graph/vocabulary.hpp"
-#include "extension/modules/imports.hpp"
 
 using namespace Godot::Demo;
 using namespace Perimortem;
@@ -66,14 +66,11 @@ static void bind_operation(
 
   godot::StringName empty;
   godot::String hint("TtxImage");
-  GDExtensionPropertyInfo returned = {
-    GDEXTENSION_VARIANT_TYPE_OBJECT,
-    empty._native_ptr(),
-    class_name._native_ptr(),
-    godot::PROPERTY_HINT_RESOURCE_TYPE,
-    hint._native_ptr(),
-    godot::PROPERTY_USAGE_DEFAULT};
-  GDExtensionClassMethodInfo method = {};
+  GDExtensionPropertyInfo returned = GDExtensionPropertyInfo(
+      GDEXTENSION_VARIANT_TYPE_OBJECT, empty._native_ptr(),
+      class_name._native_ptr(), godot::PROPERTY_HINT_RESOURCE_TYPE,
+      hint._native_ptr(), godot::PROPERTY_USAGE_DEFAULT);
+  GDExtensionClassMethodInfo method = GDExtensionClassMethodInfo();
   method.name = name._native_ptr();
   method.method_userdata =
       const_cast<Godot::Demo::Imaging::Graph::Operation*>(&definition);
@@ -246,34 +243,33 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::open_provider(
         .visit(accept, reject);
   }
 
-  Godot::Extension::Modules::Imports imports(
-      godot::ProjectSettings::get_singleton()->get_setting_with_override(
-          "ttx/imports"));
   const auto encoded = selected.utf8();
-  return imports
-      .open(
-          Core::View::Bytes(
-              reinterpret_cast<const U8*>(encoded.get_data()),
-              encoded.length()))
-      .visit(
-          [&](Ttx::Concept::Modules::Module& module) {
-            return Godot::Demo::Imaging::Graph::Provider::open(
-                       Core::Data::take(module),
-                       Godot::Demo::Imaging::Graph::Vocabulary::standard(),
-                       errors)
-                .visit(
-                    [&](Godot::Demo::Imaging::Graph::Provider& provider) {
-                      supply = &provider;
-                      return true;
-                    },
-                    reject);
-          },
-          [&](Ttx::Data::Status status) {
-            error = status == Ttx::Data::Status::Unsupported
-                        ? "Image import is not configured: " + selected
-                        : "Image import could not be loaded: " + selected;
-            return false;
-          });
+  using namespace Ttx::Semantic::Negotiation;
+  bool accepted = false;
+  auto receive = [&](Ttx::Concept::Abstract subject) {
+    accepted = Godot::Demo::Imaging::Graph::Provider::open(
+                   subject.get_query(),
+                   Godot::Demo::Imaging::Graph::Vocabulary::standard(), errors)
+                   .visit(
+                       [&](Godot::Demo::Imaging::Graph::Provider& provider) {
+                         supply = &provider;
+                         return true;
+                       },
+                       reject);
+  };
+  const perimortem_view_bytes input = perimortem_view_bytes(
+      reinterpret_cast<const U8*>(encoded.get_data()), Count(encoded.length()));
+  const auto status = Adapters::imports().visit(
+      &input,
+      Ttx::Data::Form::Compiled<Ttx::Data::Form::Native<
+          perimortem_view_bytes>::reference>::get_representation(),
+      receive);
+  if (status == Binding::Status::Unknown) {
+    error = "Image import is not configured: " + selected;
+  } else if (status != Binding::Status::Satisfied && error.is_empty()) {
+    error = "Image import could not be loaded: " + selected;
+  }
+  return status == Binding::Status::Satisfied && accepted;
 }
 
 auto Godot::Demo::Adapters::Imaging::TtxImage::set_rgba8(
@@ -391,7 +387,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::snapshot()
   Memory::Allocator::Arena errors;
   const auto image = evaluate(errors);
   if (!image) {
-    return {};
+    return godot::Ref<TtxImage>();
   }
 
   godot::Ref<TtxImage> output;
@@ -408,7 +404,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::read_pixels()
   Memory::Allocator::Arena errors;
   const auto image = evaluate(errors);
   if (!image) {
-    return {};
+    return godot::PackedByteArray();
   }
 
   auto result = image->read_pixels(errors);
@@ -422,7 +418,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::read_pixels()
       },
       [&](Core::View::Bytes message) -> godot::PackedByteArray {
         error = host_string(message);
-        return {};
+        return godot::PackedByteArray();
       });
 }
 
@@ -434,7 +430,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::apply(
   error = godot::String();
   if (!expression) {
     error = "Image has no source pixels";
-    return {};
+    return godot::Ref<TtxImage>();
   }
 
   // Godot's Variants live only for this call. Retain image dependencies by
@@ -447,23 +443,25 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::apply(
       Godot::Demo::Imaging::Graph::Operation::Input::Image) {
     if (index >= count) {
       error = "Image argument is missing";
-      return {};
+      return godot::Ref<TtxImage>();
     }
 
     const godot::Variant value(values[index++]);
     const godot::Ref<TtxImage> input = value;
     if (input.is_null() || !input->expression) {
       error = "Image argument has no source pixels";
-      return {};
+      return godot::Ref<TtxImage>();
     }
 
-    arguments.insert({input->expression, nullptr});
+    arguments.insert(
+        Godot::Demo::Imaging::Graph::Call::Argument(
+            input->expression, nullptr));
   } else if (
       operation.get_input() ==
       Godot::Demo::Imaging::Graph::Operation::Input::Kernel) {
     if (index + 3 > count) {
       error = "Kernel requires weights, width and height";
-      return {};
+      return godot::Ref<TtxImage>();
     }
 
     const godot::Variant coefficients(values[index++]), width(values[index++]),
@@ -472,21 +470,21 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::apply(
         width.get_type() != godot::Variant::INT ||
         height.get_type() != godot::Variant::INT) {
       error = "Kernel requires float32 weights and integer dimensions";
-      return {};
+      return godot::Ref<TtxImage>();
     }
 
     const godot::PackedFloat32Array weights = coefficients;
     const int64_t w = width, h = height;
     if (w <= 0 || h <= 0 || w > 1023 || h > 1023) {
       error = "Kernel dimensions must be positive and at most 1023";
-      return {};
+      return godot::Ref<TtxImage>();
     }
 
     const auto invalid = Godot::Demo::Imaging::Contracts::Kernel::validate(
         w, h, {weights.ptr(), Count(weights.size())});
     if (!invalid.is_empty()) {
       error = host_string(invalid);
-      return {};
+      return godot::Ref<TtxImage>();
     }
 
     if (!constants) {
@@ -502,12 +500,13 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::apply(
             Core::View::Vector<R32>(
                 reinterpret_cast<const R32*>(stored.get_data()),
                 weights.size()));
-    arguments.insert({nullptr, &kernel});
+    arguments.insert(
+        Godot::Demo::Imaging::Graph::Call::Argument(nullptr, &kernel));
   }
 
   if (index != count) {
     error = "Unexpected image operation arguments";
-    return {};
+    return godot::Ref<TtxImage>();
   }
 
   // Evaluate before exposing a Resource, preserving the existing script
@@ -526,7 +525,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::apply(
       });
   if (!success) {
     call.release();
-    return {};
+    return godot::Ref<TtxImage>();
   }
 
   godot::Ref<TtxImage> output;
@@ -576,7 +575,8 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::get_offers() -> godot::Array {
           godot::Dictionary item;
           const auto id = System::Uuid(offer.contract).serialize();
           item["contract"] = host_string(id);
-          item["name"] = host_string({offer.name.data, offer.name.size});
+          item["name"] =
+              host_string(Core::View::Bytes(offer.name.data, offer.name.size));
           item["input"] = int64_t(offer.input);
           item["minimum"] = int64_t(offer.minimum);
           item["maximum"] = int64_t(offer.maximum);
@@ -598,7 +598,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::admit(
   Godot::Demo::Imaging::Graph::Observation observation;
   Memory::Allocator::Arena errors;
   godot::Dictionary result;
-  result["status"] = int64_t(TTX_BINDING_UNSUPPORTED);
+  result["status"] = int64_t(TTX_BINDING_UNKNOWN);
   result["reason"] = "Operation is not offered.";
   const auto* image = evaluate(errors);
   if (!image) {
@@ -628,8 +628,8 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::admit(
         if (id) {
           const auto answer = offers.admit(*id, width, height);
           result["status"] = int64_t(answer.status);
-          result["reason"] =
-              host_string({answer.reason.data, answer.reason.size});
+          result["reason"] = host_string(
+              Core::View::Bytes(answer.reason.data, answer.reason.size));
         }
       },
       [&](Ttx::Semantic::Negotiation::Binding::Failure failure) {
@@ -647,7 +647,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::invoke(
   Memory::Allocator::Arena errors;
   const auto* image = evaluate(errors);
   if (!image) {
-    return {};
+    return godot::Ref<TtxImage>();
   }
   Core::Option<Memory::Allocator::Arena> constants = Memory::Allocator::Arena();
   const auto encoded = name.utf8();
@@ -676,7 +676,7 @@ auto Godot::Demo::Adapters::Imaging::TtxImage::invoke(
       });
   if (!operation) {
     error = "Image operation is not offered.";
-    return {};
+    return godot::Ref<TtxImage>();
   }
   Memory::Dynamic::Vector<godot::Variant> arguments;
   for (int64_t i = 0; i != values.size(); ++i) {

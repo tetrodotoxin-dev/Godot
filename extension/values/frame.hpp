@@ -7,7 +7,7 @@
 #include "perimortem/memory/dynamic/vector.hpp"
 
 #include "extension/values/field.hpp"
-#include "ttx/concept/declarations/callable.hpp"
+#include "ttx/concept/capabilities/callable.hpp"
 
 namespace Godot::Extension::Values {
 
@@ -17,7 +17,7 @@ namespace Godot::Extension::Values {
 // not be the physical order of the provider's record.
 class Frame {
  public:
-  static auto compile(Ttx::Concept::Declarations::Callable::Frame source)
+  static auto compile(Ttx::Concept::Capabilities::Callable::Frame source)
       -> Perimortem::Utility::Result<Frame, Ttx::Data::Status>;
   auto get_representation() const -> Ttx::Data::Form::Representation {
     return Ttx::Data::Form::Representation(

@@ -5,11 +5,15 @@ module(name = "godot")
 
 bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "platforms", version = "1.0.0")
-bazel_dep(name = "ttx_cuda", version = "0.0.1")
-local_path_override(
+bazel_dep(name = "ttx_cuda", version = "0.2.0")
+archive_override(
     module_name = "ttx_cuda",
-    path = "../cuda",
+    sha256 = "905f9a6ba597b88de9ea96932df5d87f0b0a9e8bbdf867995ee5a1c91a44e1cc",
+    urls = ["https://github.com/tetrodotoxin-dev/CUDA/releases/download/v0.2.0/ttx_cuda-0.2.0-source.zip"],
 )
+
+nvidia = use_extension("@ttx_cuda//build:sdk.bzl", "dependencies")
+use_repo(nvidia, "cuda_nvrtc_linux", "libcufft_linux")
 
 godot_cpp_repository = use_repo_rule("//extension/build:sdk.bzl", "godot_cpp_repository")
 
@@ -39,11 +43,11 @@ godot_cpp_repository(
     profile = "//extension/build:profile.json",
 )
 
-bazel_dep(name = "tetro_toolchain", version = "0.1.0")
+bazel_dep(name = "tetro_toolchain", version = "0.2.1")
 archive_override(
     module_name = "tetro_toolchain",
-    sha256 = "c34c2230660426abefb7344305969b72ebb7cfe119e9adeaaa81d5533c7cd1f5",
-    urls = ["https://github.com/tetrodotoxin-dev/Toolchain/releases/download/v0.1.0/tetro_toolchain-0.1.0-source.tar.gz"],
+    sha256 = "eea7461fb783d2b87a638c4ce1c8d9cbee73e54c90259516ca73cd7e850bdc0f",
+    urls = ["https://github.com/tetrodotoxin-dev/Toolchain/releases/download/v0.2.1/tetro_toolchain-0.2.1-source.tar.gz"],
 )
 
 register_toolchains("@tetro_toolchain//:cc_toolchain_for_linux_x86_64", "@tetro_toolchain//:cc_toolchain_for_wasm32", "@tetro_toolchain//:cc_toolchain_for_windows_x64")
@@ -52,21 +56,27 @@ sdks = use_extension("@tetro_toolchain//:sdk.bzl", "dependencies")
 sdks.release(
     name = "perimortem",
     archives = {
-        "linux-x86_64-v3": "6c64132eebb13ef8db2458f77c3885c9cf1e0a6ff4ef72826397de53277510b3",
-        "wasm32-emscripten": "0f04ee2af8c803e96b893430ea5215e448d79c41ef28d7c286086c9536330878",
+        "headers": "2bb19a82ceb2dd06a122fb51142e96fd13d52fd5ed323b8a662cb640082636ed",
+        "linux-x86_64-v3": "f62c3b71c9c5f554467c9dc03237073fc34d670fa596aa9cd99972dabfb2e653",
+        "windows-x86_64-msvc": "543763f2a684bc410e264f60115a13cc92b20ae12ae25a9c5294c685f9d06d94",
+        "wasm32-emscripten": "7c33f010c47932503f3ef8dcbddf3e4520a34b9e0bac70514a0cb38117400c42",
     },
     project = "Perimortem",
     version = "0.1.0",
     deps = [],
 )
+use_repo(sdks, "perimortem")
+
 sdks.release(
     name = "ttx",
     archives = {
-        "linux-x86_64-v3": "930c5a1c770a841f9a04bc41264942373c70076805634e0cba8a5021d010e2a8",
-        "wasm32-emscripten": "d5daa90ee9bddbb2b89a39ccd27bd6593eee667a3fae17ec45928694577cffcc",
+        "headers": "b29fc0774de7631a94042a9fc0f08e8a537366b380403d714133ee014bdaedfa",
+        "linux-x86_64-v3": "0214ef3b44b52ec10c1c112d62feb4656771f0d8886303756ec47b847e3489cb",
+        "windows-x86_64-msvc": "2058106e0a0458f6ed322b9288ad0ed6f3d57f550b64bc7c342e6bbc526a8346",
+        "wasm32-emscripten": "997213f7564763ca5a496804d62b41b494515ae8a6adee91739b5bd64d7ee699",
     },
     project = "TTX",
-    version = "0.1.0",
+    version = "0.2.0",
     deps = ["@perimortem"],
 )
-use_repo(sdks, "perimortem", "ttx")
+use_repo(sdks, "ttx")

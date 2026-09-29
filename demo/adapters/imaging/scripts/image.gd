@@ -6,12 +6,11 @@ extends RefCounted
 
 # These UUIDs name the same callable promises as contracts/image.h. The bridge
 # asks only for the contract being bound. Returning a Callable supplies it;
-# Unsupported, Pending and Rejected remain distinct decisions of this owner.
+# Unknown leaves the question unsettled, while Rejected explicitly refuses it.
 const INVERT = "aa57de9d-d269-4e29-8892-5a047fbf0601"
 const CONVOLVE = "aa57de9d-d269-4e29-8892-5a047fbf0602"
 const COMPOSITE = "aa57de9d-d269-4e29-8892-5a047fbf0603"
-const UNSUPPORTED = 1
-const PENDING = 2
+const UNKNOWN = 1
 const REJECTED = 3
 
 var _width: int
@@ -25,7 +24,7 @@ func _init(width: int, height: int, pixels: PackedByteArray) -> void:
 
 # A promise does not construct the callable or establish its native ABI.
 func supports(contract: String) -> int:
-	return 0 if contract in [INVERT, CONVOLVE, COMPOSITE] else UNSUPPORTED
+	return 0 if contract in [INVERT, CONVOLVE, COMPOSITE] else UNKNOWN
 
 func fulfill(contract: String) -> Variant:
 	match contract:
@@ -35,7 +34,7 @@ func fulfill(contract: String) -> Variant:
 			return convolve
 		COMPOSITE:
 			return composite
-	return UNSUPPORTED
+	return UNKNOWN
 
 # Observation lends no mutable access to this publication. A caller may change
 # the returned array without changing old snapshots or cached operation results.
@@ -118,13 +117,13 @@ func admit(contract: String, width: int = 0, height: int = 0) -> Dictionary:
 
 func offers() -> Array:
 	var result: Array = []
-	if supports(INVERT) != UNSUPPORTED:
+	if supports(INVERT) == 0:
 		result.append({"contract": INVERT, "name": "invert", "input": 0})
-	if supports(CONVOLVE) != UNSUPPORTED:
+	if supports(CONVOLVE) == 0:
 		var maximum := mini(1023, int(sqrt(float(CONVOLUTION_BUDGET) / (_width * _height))))
 		if maximum % 2 == 0:
 			maximum = maxi(0, maximum - 1)
 		result.append({"contract": CONVOLVE, "name": "convolve", "input": 1, "minimum": 1, "maximum": maximum, "step": 2})
-	if supports(COMPOSITE) != UNSUPPORTED:
+	if supports(COMPOSITE) == 0:
 		result.append({"contract": COMPOSITE, "name": "composite", "input": 2})
 	return result

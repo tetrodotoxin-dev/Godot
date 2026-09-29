@@ -4,7 +4,8 @@
 #pragma once
 
 #include "demo/imaging/cuda/runtime.hpp"
-#include "demo/sampling/publication.hpp"
+#include "demo/sampling/provider.hpp"
+#include "ttx/semantic/negotiation/receiver.h"
 
 namespace Godot::Demo::Sampling::Cuda {
 
@@ -17,8 +18,7 @@ class Samples {
   Samples(const Samples&) = delete;
   auto operator=(const Samples&) -> Samples& = delete;
 
-  static auto create()
-      -> Perimortem::Utility::Result<ttx_publication, Ttx::Data::Status>;
+  static auto create(ttx_query_receiver receive) -> ttx_binding_status;
   auto count(U32 seed, U32 first, U32 size, U64* output) -> ttx_data_status;
 
  private:
@@ -26,7 +26,7 @@ class Samples {
   ~Samples();
   Godot::Demo::Imaging::Cuda::Runtime& runtime;
   CUdeviceptr counter;
-  Sampling::Publication publication;
+  Sampling::Provider publication;
 };
 
 }  // namespace Godot::Demo::Sampling::Cuda

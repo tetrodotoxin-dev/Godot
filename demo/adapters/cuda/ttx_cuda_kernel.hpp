@@ -23,6 +23,7 @@ namespace Godot::Demo::Adapters::Cuda {
 class TtxCudaKernel : public godot::RefCounted {
   GDCLASS(TtxCudaKernel, godot::RefCounted)
  public:
+  ~TtxCudaKernel() override;
   struct Argument {
     Ttx::Data::Form::Schema::Value type;
     Count offset;
@@ -32,8 +33,7 @@ class TtxCudaKernel : public godot::RefCounted {
   };
 
   static auto adopt(
-      Ttx::Concept::Modules::Module module,
-      Ttx::Semantic::Ownership::Publication publication,
+      Ttx::Concept::Policies::Borrowed subject,
       const Ttx::Data::Form::Representation& form,
       Perimortem::Memory::Dynamic::Vector<Argument> arguments)
       -> godot::Ref<TtxCudaKernel>;
@@ -48,8 +48,7 @@ class TtxCudaKernel : public godot::RefCounted {
   static auto _bind_methods() -> void;
 
  private:
-  Perimortem::Core::Option<Ttx::Concept::Modules::Module> module;
-  Perimortem::Core::Option<Ttx::Semantic::Ownership::Publication> owner;
+  Perimortem::Core::Option<Ttx::Concept::Policies::Borrowed> owner;
   Perimortem::Core::Option<::Cuda::Contracts::Kernel> kernel;
   Perimortem::Memory::Dynamic::Bytes form;
   Perimortem::Memory::Dynamic::Vector<Argument> arguments;

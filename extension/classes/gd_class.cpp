@@ -8,93 +8,11 @@
 #include "perimortem/core/null_terminated.hpp"
 
 #include "extension/classes/class.hpp"
-#include "ttx/concept/declarations/extensible.hpp"
+#include "ttx/concept/capabilities/borrow.hpp"
+#include "ttx/concept/capabilities/callable.hpp"
 
 using namespace Godot::Extension;
 using namespace Perimortem;
-
-auto Godot::Extension::Classes::GDClass::get_interface() const
-    -> Ttx::Concept::Abstract {
-  static const ttx_abstract_ops operations = {
-    [](const void* source, perimortem_uuid id) -> ttx_binding_status {
-      const System::Uuid contract(id);
-      if (contract == Ttx::Concept::Abstract::contract_id ||
-          contract == ::Godot::Extension::Contracts::GDClass::contract_id) {
-        return TTX_BINDING_SATISFIED;
-      }
-
-      return static_cast<ttx_binding_status>(
-          static_cast<const GDClass*>(source)->subject.supports(contract));
-    },
-    [](const void* source, perimortem_uuid id,
-       ttx_storage requested) -> ttx_binding_status {
-      const auto& policy = *static_cast<const GDClass*>(source);
-      if (System::Uuid(id) == Ttx::Concept::Abstract::contract_id) {
-        const ttx_abstract api = {source, &operations};
-        return ttx_binding_provide(
-            ttx_abstract_representation(), &api, requested);
-      }
-
-      if (System::Uuid(id) ==
-          ::Godot::Extension::Contracts::GDClass::contract_id) {
-        static const godot_gdclass_operations own = {
-          [](const void* source, ttx_publication* output) -> ttx_data_status {
-            return static_cast<const GDClass*>(source)->emit().visit(
-                [&](Ttx::Semantic::Ownership::Publication& value)
-                    -> ttx_data_status {
-                  *output = value.take();
-                  return TTX_DATA_SUCCESS;
-                },
-                [](Ttx::Data::Status status) {
-                  return static_cast<ttx_data_status>(status);
-                });
-          },
-        };
-        return static_cast<ttx_binding_status>(
-            Ttx::Semantic::Negotiation::Binding::provide<
-                ::Godot::Extension::Contracts::GDClass>(
-                godot_gdclass(source, &own),
-                Ttx::Data::Form::Storage(requested)));
-      }
-
-      return static_cast<ttx_binding_status>(policy.subject.get_query().bind(
-          System::Uuid(id), Ttx::Data::Form::Storage(requested)));
-    },
-    [](const void* source) {
-      auto value = static_cast<const GDClass*>(source)->subject.get_data();
-      return perimortem_view_bytes{value.get_data(), value.get_size()};
-    },
-    [](const void* source) {
-      return static_cast<const GDClass*>(source)->get_interface().get_abi();
-    },
-    [](const void* source, perimortem_view_bytes name) {
-      return static_cast<const GDClass*>(source)
-          ->subject.resolve_concept({name.data, name.size})
-          .get_abi();
-    },
-    [](const void* source, ttx_concept_visitor visitor) {
-      const auto value = static_cast<const GDClass*>(source)->subject.get_abi();
-      value.operations->visit_concepts(value.source, visitor);
-    },
-  };
-  return Ttx::Concept::Abstract(this, operations);
-}
-
-// A provisional or rejected declaration is not an absent method. Preserve
-// that distinction until the compiler reports why this class cannot publish.
-static auto declaration_failure(
-    Ttx::Semantic::Negotiation::Binding::Failure failure) -> Ttx::Data::Status {
-  switch (failure) {
-  case Ttx::Semantic::Negotiation::Binding::Failure::Unsupported:
-    return Ttx::Data::Status::Unsupported;
-  case Ttx::Semantic::Negotiation::Binding::Failure::Pending:
-    return Ttx::Data::Status::Busy;
-  case Ttx::Semantic::Negotiation::Binding::Failure::Rejected:
-    return Ttx::Data::Status::Denied;
-  }
-
-  return Ttx::Data::Status::Invalid;
-}
 
 static auto compile_member(
     Core::View::Bytes name,
@@ -103,20 +21,25 @@ static auto compile_member(
     -> Utility::Result<Godot::Extension::Classes::Method, Ttx::Data::Status> {
   using Result =
       Utility::Result<Godot::Extension::Classes::Method, Ttx::Data::Status>;
-  return member.bind<Ttx::Concept::Declarations::Callable>().visit(
-      [&](Ttx::Concept::Declarations::Callable callable) -> Result {
+  return member.bind<Ttx::Concept::Capabilities::Callable>().visit(
+      [&](Ttx::Concept::Capabilities::Callable callable) -> Result {
         return callable.describe().visit(
-            [&](Ttx::Concept::Declarations::Callable::Description description)
+            [&](Ttx::Concept::Capabilities::Callable::Description description)
                 -> Result {
               return Godot::Extension::Classes::Method::compile(
                   name, description, index);
             },
             [](Ttx::Semantic::Negotiation::Binding::Failure failure) -> Result {
-              return declaration_failure(failure);
+              return failure == Ttx::Semantic::Negotiation::Binding::Failure::
+                                    Unknown
+                         ? Ttx::Data::Status::Unsupported
+                         : Ttx::Data::Status::Denied;
             });
       },
       [](Ttx::Semantic::Negotiation::Binding::Failure failure) -> Result {
-        return declaration_failure(failure);
+        return failure == Ttx::Semantic::Negotiation::Binding::Failure::Unknown
+                   ? Ttx::Data::Status::Unsupported
+                   : Ttx::Data::Status::Denied;
       });
 }
 
@@ -130,19 +53,12 @@ static auto compile_members(Ttx::Concept::Abstract subject) -> Utility::Result<
       return;
     }
 
-    // A declaration can expose configuration and metadata beside its methods.
-    // Discovery asks which children promise a callable, then binding still has
-    // to establish the actual interface. A policy refusal remains
-    // authoritative.
+    // A subject can expose configuration and metadata beside its methods.
+    // The exporter selects children that accept Callable, then binds their
+    // descriptions to determine the method surface it can register.
     const auto support =
-        member.supports<Ttx::Concept::Declarations::Callable>();
-    if (support == Ttx::Semantic::Negotiation::Binding::Status::Unsupported) {
-      return;
-    }
-
+        member.supports<Ttx::Concept::Capabilities::Callable>();
     if (support != Ttx::Semantic::Negotiation::Binding::Status::Satisfied) {
-      status = declaration_failure(
-          static_cast<Ttx::Semantic::Negotiation::Binding::Failure>(support));
       return;
     }
 
@@ -170,42 +86,29 @@ static auto compile_members(Ttx::Concept::Abstract subject) -> Utility::Result<
   return methods;
 }
 
-static auto retain_class(
-    const Ttx::Concept::Modules::Module& module,
-    Ttx::Semantic::Ownership::Publication factory,
-    godot::String name,
-    godot::String base,
-    Memory::Dynamic::Vector<Godot::Extension::Classes::Method> methods)
-    -> Utility::
-        Result<Ttx::Semantic::Ownership::Publication, Ttx::Data::Status> {
-  using Result =
-      Utility::Result<Ttx::Semantic::Ownership::Publication, Ttx::Data::Status>;
-  return factory.get_query().bind<Ttx::Semantic::Ownership::Factory>().visit(
-      [&](Ttx::Semantic::Ownership::Factory constructor) -> Result {
-        auto memory = Core::Bibliotheca::check_out(
-            sizeof(Godot::Extension::Classes::Class));
-        auto* output = new (memory.ptr, Core::Placement::Construct)
-            Godot::Extension::Classes::Class(
-                module, Core::Data::take(factory), constructor, name, base,
-                Core::Data::take(methods));
-        return Ttx::Semantic::Ownership::Publication(
-            {output->get_query(), [](const void* source) {
-               auto* output = const_cast<Godot::Extension::Classes::Class*>(
-                   static_cast<const Godot::Extension::Classes::Class*>(
-                       source));
-               output->~Class();
-               Core::Bibliotheca::remit(reinterpret_cast<U8*>(output));
-             }});
-      },
-      [](Ttx::Semantic::Negotiation::Binding::Failure failure) -> Result {
-        return declaration_failure(failure);
-      });
+auto Godot::Extension::Classes::GDClass::supports(System::Uuid id) const
+    -> Ttx::Semantic::Negotiation::Binding::Status {
+  using namespace Ttx::Semantic::Negotiation;
+  return id == Ttx::Concept::Capabilities::Export::contract_id
+             ? Binding::Status::Satisfied
+             : Binding::Status::Unknown;
 }
 
-auto Godot::Extension::Classes::GDClass::emit() const -> Utility::
-    Result<Ttx::Semantic::Ownership::Publication, Ttx::Data::Status> {
-  using Result =
-      Utility::Result<Ttx::Semantic::Ownership::Publication, Ttx::Data::Status>;
+auto Godot::Extension::Classes::GDClass::bind_interface(
+    System::Uuid id,
+    Ttx::Data::Form::Storage target) const
+    -> Ttx::Semantic::Negotiation::Binding::Status {
+  using namespace Ttx::Semantic::Negotiation;
+  return id == Ttx::Concept::Capabilities::Export::contract_id
+             ? Binding::provide<Ttx::Concept::Capabilities::Export>(
+                   Ttx::Concept::Capabilities::Export::provide(*this).get_abi(),
+                   target)
+             : Binding::Status::Unknown;
+}
+
+auto Godot::Extension::Classes::GDClass::expose(Ttx::Concept::Abstract subject)
+    const -> Ttx::Semantic::Negotiation::Binding::Status {
+  using namespace Ttx::Semantic::Negotiation;
   const auto class_name = godot::String::utf8(
       reinterpret_cast<const char*>(name.get_data()), name.get_size());
   const auto base_name = godot::String::utf8(
@@ -213,67 +116,58 @@ auto Godot::Extension::Classes::GDClass::emit() const -> Utility::
   if (name.is_empty() || godot::ClassDB::class_exists(class_name) ||
       !godot::ClassDB::class_exists(base_name)) {
     error = "Class name is occupied or its native base is unavailable."_view;
-    return Ttx::Data::Status::Invalid;
+    return Binding::Status::Rejected;
   }
-
-  auto api = godot::ClassDB::class_get_api_type(base_name);
+  const auto api = godot::ClassDB::class_get_api_type(base_name);
   if ((api != godot::ClassDB::API_CORE && api != godot::ClassDB::API_EDITOR) ||
       !godot::ClassDB::can_instantiate(base_name)) {
-    error = "GDClass requires an instantiable native Godot base."_view;
-    return Ttx::Data::Status::Unsupported;
+    error = "Godot class export requires an instantiable native base."_view;
+    return Binding::Status::Rejected;
   }
-
-  // Bind before following another route. A resolved referent may be more
-  // permissive than the policy through which this declaration was exported.
-  return subject.bind<Ttx::Concept::Declarations::Extensible>().visit(
-      [&](Ttx::Concept::Declarations::Extensible extensible) -> Result {
-        return compile_members(subject).visit(
-            [&](Memory::Dynamic::Vector<Method>& methods) -> Result {
-              // Only after every declaration has a supported adapter do we
-              // acquire runtime state. The terminal receives copies of the
-              // registration facts and an independent factory/code lifetime.
-              return extensible.emit_factory().visit(
-                  [&](Ttx::Semantic::Ownership::Publication& factory)
-                      -> Result {
-                    return retain_class(
-                               module, Core::Data::take(factory), class_name,
-                               base_name, Core::Data::take(methods))
-                        .visit(
-                            [](Ttx::Semantic::Ownership::Publication& terminal)
-                                -> Result {
-                              return Core::Data::take(terminal);
-                            },
-                            [&](Ttx::Data::Status failure) -> Result {
-                              error =
-                                  "The emitted runtime does not supply Factory."_view;
-                              return failure;
-                            });
+  return compile_members(subject).visit(
+      [&](Memory::Dynamic::Vector<Method>& methods) {
+        // The retained runtime supplies construction independently of method
+        // discovery. Its policy decides which state needs to survive the call.
+        return subject.bind<Ttx::Concept::Capabilities::Borrow>().visit(
+            [&](Ttx::Concept::Capabilities::Borrow policy) {
+              return policy.borrow().visit(
+                  [&](Ttx::Concept::Policies::Borrowed runtime) {
+                    return runtime.bind<Ttx::Concept::Capabilities::Create>().visit(
+                        [&](Ttx::Concept::Capabilities::Create create) {
+                          auto* output = new Class(
+                              runtime, create, class_name, base_name,
+                              Core::Data::take(methods));
+                          auto status = Binding::Status::Rejected;
+                          if (output->publish() == Ttx::Data::Status::Success) {
+                            registrations.insert(output);
+                            return Binding::Status::Satisfied;
+                          } else {
+                            error =
+                                "The completed class could not register with Godot."_view;
+                          }
+                          delete output;
+                          return status;
+                        },
+                        [&](Binding::Failure failure) {
+                          runtime.release();
+                          error =
+                              "The retained subject did not supply Create."_view;
+                          return static_cast<Binding::Status>(failure);
+                        });
                   },
-                  [&](Ttx::Data::Status failure) -> Result {
+                  [&](Binding::Failure failure) {
                     error =
-                        "The declaration could not emit an independent factory."_view;
-                    return failure;
+                        "The offered subject could not retain its runtime capabilities."_view;
+                    return static_cast<Binding::Status>(failure);
                   });
             },
-            [&](Ttx::Data::Status failure) -> Result {
-              error =
-                  "A member has no supported synchronous callable realization."_view;
-              return failure;
+            [&](Binding::Failure failure) {
+              error = "The offered subject did not supply Borrow."_view;
+              return static_cast<Binding::Status>(failure);
             });
       },
-      [&](Ttx::Semantic::Negotiation::Binding::Failure failure) -> Result {
-        switch (failure) {
-        case Ttx::Semantic::Negotiation::Binding::Failure::Unsupported:
-          error = "The export is not an Extensible class."_view;
-          return Ttx::Data::Status::Unsupported;
-        case Ttx::Semantic::Negotiation::Binding::Failure::Pending:
-          error = "The exported class is still pending."_view;
-          return Ttx::Data::Status::Busy;
-        case Ttx::Semantic::Negotiation::Binding::Failure::Rejected:
-          error = "The exported policy rejected class exposure."_view;
-          return Ttx::Data::Status::Denied;
-        }
-
-        return Ttx::Data::Status::Invalid;
+      [&](Ttx::Data::Status) {
+        error = "A selected method has no supported callable realization."_view;
+        return Binding::Status::Rejected;
       });
 }

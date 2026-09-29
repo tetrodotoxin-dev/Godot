@@ -15,7 +15,7 @@ class Method {
  public:
   static auto compile(
       Perimortem::Core::View::Bytes name,
-      Ttx::Concept::Declarations::Callable::Description description,
+      Ttx::Concept::Capabilities::Callable::Description description,
       U32 index) -> Perimortem::Utility::Result<Method, Ttx::Data::Status>;
   auto publish(const godot::StringName& class_name) const -> void;
   auto get_contract() const -> Perimortem::System::Uuid { return contract; }

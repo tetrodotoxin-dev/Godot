@@ -109,8 +109,7 @@ auto Adapters::Imaging::Scripts::Image::select(
               -> Core::Option<Ttx::Semantic::Negotiation::Binding::Failure> {
             if (answer.get_type() == godot::Variant::INT) {
               const int64_t status = answer;
-              if (status == TTX_BINDING_UNSUPPORTED ||
-                  status == TTX_BINDING_PENDING ||
+              if (status == TTX_BINDING_UNKNOWN ||
                   status == TTX_BINDING_REJECTED) {
                 return static_cast<
                     Ttx::Semantic::Negotiation::Binding::Failure>(status);
@@ -150,8 +149,9 @@ auto Adapters::Imaging::Scripts::Image::supports(System::Uuid contract) const
             }
 
             const int64_t status = answer;
-            return status >= TTX_BINDING_SATISFIED &&
-                           status <= TTX_BINDING_REJECTED
+            return status == TTX_BINDING_SATISFIED ||
+                           status == TTX_BINDING_UNKNOWN ||
+                           status == TTX_BINDING_REJECTED
                        ? static_cast<Status>(status)
                        : Status::Rejected;
           },
@@ -232,7 +232,7 @@ auto Adapters::Imaging::Scripts::Image::fulfill(
                   (*static_cast<decltype(find)*>(source))(offer);
                 }});
   if (input > IMAGE_INPUT_IMAGE) {
-    return Ttx::Semantic::Negotiation::Binding::Status::Unsupported;
+    return Ttx::Semantic::Negotiation::Binding::Status::Unknown;
   }
 
   godot::Callable callable;
@@ -284,7 +284,7 @@ auto Adapters::Imaging::Scripts::Image::fulfill(
     }
     }
 
-    return Binding::Status::Unsupported;
+    return Binding::Status::Unknown;
   };
   const auto status = publish();
   if (status == Ttx::Semantic::Negotiation::Binding::Status::Satisfied) {
@@ -455,7 +455,9 @@ auto Adapters::Imaging::Scripts::Image::admit(
             const S64 status =
                 int64_t(answer.get("status", TTX_BINDING_REJECTED));
             return {
-              status >= 0 && status <= TTX_BINDING_REJECTED
+              status == TTX_BINDING_SATISFIED ||
+                      status == TTX_BINDING_UNKNOWN ||
+                      status == TTX_BINDING_REJECTED
                   ? U8(status)
                   : TTX_BINDING_REJECTED,
               {errors.get_view().get_data(), errors.get_size()}};

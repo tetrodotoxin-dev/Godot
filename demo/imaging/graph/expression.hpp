@@ -5,6 +5,7 @@
 
 #include "demo/imaging/graph/image.hpp"
 #include "ttx/concept/abstract.hpp"
+#include "ttx/concept/policies/none.h"
 
 namespace Godot::Demo::Imaging::Graph {
 

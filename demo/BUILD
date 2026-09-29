@@ -3,6 +3,7 @@
 
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_shared_library.bzl", "cc_shared_library")
+load("//demo:build/runtime.bzl", "runtime_libraries")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -20,7 +21,7 @@ cc_shared_library(
         "//demo/imaging/contracts",
         "//demo/imaging/publication",
         "//demo/imaging/render",
-        "//demo/sampling:publication",
+        "//demo/sampling:provider",
         "//demo/sampling/contracts",
         "//extension/contracts",
     ],
@@ -55,6 +56,28 @@ cc_binary(
     }),
 )
 
+runtime_libraries(
+    name = "cuda_runtime",
+    deps = [
+        "@ttx_cuda//build:compute",
+        "@ttx_cuda//build:fft",
+    ],
+)
+
+genrule(
+    name = "cuda_notices",
+    srcs = [
+        "@cuda_nvrtc_linux//:LICENSE",
+        "@libcufft_linux//:LICENSE",
+    ],
+    outs = [
+        "NVIDIA-NVRTC-LICENSE.txt",
+        "NVIDIA-CUFFT-LICENSE.txt",
+    ],
+    cmd = "cp $(location @cuda_nvrtc_linux//:LICENSE) $(location NVIDIA-NVRTC-LICENSE.txt) && " +
+          "cp $(location @libcufft_linux//:LICENSE) $(location NVIDIA-CUFFT-LICENSE.txt)",
+)
+
 filegroup(
     name = "addon_payload",
     srcs = [
@@ -68,6 +91,8 @@ filegroup(
         "//demo/sampling/class:sampler_extension",
     ] + select({
         "//:cuda_enabled": [
+            ":cuda_notices",
+            ":cuda_runtime",
             "//demo/imaging/cuda:cuda_provider",
             "@ttx_cuda//cuda:plugin",
         ],

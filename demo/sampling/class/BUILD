@@ -10,7 +10,6 @@ cc_library(
     hdrs = [
         "declaration.hpp",
         "exports.hpp",
-        "runtime.hpp",
         "sampler.hpp",
     ],
     copts = ["-fvisibility=hidden"],

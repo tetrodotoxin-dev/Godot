@@ -111,10 +111,8 @@ auto Imaging::Graph::Image::bind_operation(const Operation& operation) const
 auto Imaging::Graph::Image::binding_error(
     Ttx::Semantic::Negotiation::Binding::Failure failure) -> Core::View::Bytes {
   switch (failure) {
-  case Ttx::Semantic::Negotiation::Binding::Failure::Unsupported:
-    return "The image provider does not support this operation."_view;
-  case Ttx::Semantic::Negotiation::Binding::Failure::Pending:
-    return "The image operation cannot yet be fulfilled."_view;
+  case Ttx::Semantic::Negotiation::Binding::Failure::Unknown:
+    return "The provider did not establish this operation."_view;
   case Ttx::Semantic::Negotiation::Binding::Failure::Rejected:
     return "The image provider rejected this operation contract."_view;
   }

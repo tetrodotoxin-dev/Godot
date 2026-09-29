@@ -25,10 +25,17 @@ Sampling::Cuda::Samples::Samples(
     CUdeviceptr counter)
     : runtime(runtime),
       counter(counter),
-      publication(this, operations, [](const void* source) {
-        Core::Object<>(reinterpret_cast<U8*>(const_cast<void*>(source)))
-            .release();
-      }) {}
+      publication(
+          this,
+          operations,
+          [](const void* source) {
+            Core::Object<>(reinterpret_cast<U8*>(const_cast<void*>(source)))
+                .retain();
+          },
+          [](const void* source) {
+            Core::Object<>(reinterpret_cast<U8*>(const_cast<void*>(source)))
+                .release();
+          }) {}
 
 Sampling::Cuda::Samples::~Samples() {
   {
@@ -63,30 +70,29 @@ static auto allocate(Imaging::Cuda::Runtime& runtime, CUdeviceptr& counter)
   return Ttx::Data::Status::Success;
 }
 
-auto Sampling::Cuda::Samples::create()
-    -> Utility::Result<ttx_publication, Ttx::Data::Status> {
+auto Sampling::Cuda::Samples::create(ttx_query_receiver receive)
+    -> ttx_binding_status {
   return Godot::Demo::Imaging::Cuda::Runtime::create().visit(
-      [](Godot::Demo::Imaging::Cuda::Runtime& runtime)
-          -> Utility::Result<ttx_publication, Ttx::Data::Status> {
+      [&](Godot::Demo::Imaging::Cuda::Runtime& runtime) -> ttx_binding_status {
         CUdeviceptr counter;
-        const auto status = allocate(runtime, counter);
-        if (status != Ttx::Data::Status::Success) {
+        if (allocate(runtime, counter) != Ttx::Data::Status::Success) {
           runtime.release();
-          return status;
+          return TTX_BINDING_REJECTED;
         }
-
         static const Core::Object<>::Descriptor descriptor(
             sizeof(Samples), alignof(Samples), [](U8* storage) {
               reinterpret_cast<Samples*>(storage)->~Samples();
             });
-        auto storage = Core::Object<>::create(descriptor).get_payload();
-        auto& result = *new (storage, Core::Placement::Construct)
+        auto storage = Core::Object<>::create(descriptor);
+        auto& result = *new (storage.get_payload(), Core::Placement::Construct)
                            Samples(runtime, counter);
-        return result.publication.get_publication();
+        const auto status =
+            receive.receive(receive.source, result.publication.get_query());
+        storage.release();
+        return status;
       },
-      [](Core::View::Bytes)
-          -> Utility::Result<ttx_publication, Ttx::Data::Status> {
-        return Ttx::Data::Status::IoError;
+      [](Core::View::Bytes) -> ttx_binding_status {
+        return TTX_BINDING_REJECTED;
       });
 }
 

@@ -61,7 +61,7 @@ auto Imaging::Publication::Image::get_abi() const -> image_object {
            ttx_storage requested) -> ttx_binding_status {
           if (System::Uuid(id) !=
               Ttx::Semantic::Transport::Flow::block.provider) {
-            return TTX_BINDING_UNSUPPORTED;
+            return TTX_BINDING_UNKNOWN;
           }
 
           static const ttx_block_provider_operations table = {
@@ -86,7 +86,7 @@ auto Imaging::Publication::Image::get_abi() const -> image_object {
           return System::Uuid(id) ==
                          Ttx::Semantic::Transport::Flow::block.provider
                      ? TTX_BINDING_SATISFIED
-                     : TTX_BINDING_UNSUPPORTED;
+                     : TTX_BINDING_UNKNOWN;
         }};
     },
     [](const void* source) {
@@ -159,7 +159,7 @@ auto Imaging::Publication::Image::standard_offers(
   };
   for (const auto& offer : offers) {
     if (supports(System::Uuid(offer.contract)) !=
-        Ttx::Semantic::Negotiation::Binding::Status::Unsupported) {
+        Ttx::Semantic::Negotiation::Binding::Status::Unknown) {
       visitor.visit(visitor.source, offer);
     }
   }

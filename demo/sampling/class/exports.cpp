@@ -6,7 +6,8 @@
 #include "perimortem/core/bibliotheca.hpp"
 #include "perimortem/core/null_terminated.hpp"
 
-#include "ttx/concept/modules/module.h"
+#include "ttx/concept/policies/none.h"
+#include "ttx/semantic/negotiation/library.h"
 
 using namespace Godot::Demo;
 using namespace Perimortem;
@@ -27,18 +28,10 @@ auto Sampling::Class::Exports::visit_concepts(
   visitor(declaration.get_data(), Ttx::Concept::Abstract::provide(declaration));
 }
 
-PERIMORTEM_C __attribute__((visibility("default"))) ttx_data_status
-    ttx_module_open(ttx_semantic_query host, ttx_module_acquisition* output) {
-  auto storage = Core::Bibliotheca::check_out(sizeof(Sampling::Class::Exports));
-  auto* plugin = new (storage.ptr, Core::Placement::Construct)
+PERIMORTEM_C __attribute__((visibility("default"))) ttx_binding_status
+    ttx_query(ttx_semantic_query host, ttx_query_receiver receive) {
+  const Sampling::Class::Exports plugin =
       Sampling::Class::Exports(Ttx::Semantic::Negotiation::Query(host));
-  *output = {
-    Ttx::Concept::Abstract::provide(*plugin).get_abi(), plugin,
-    [](const void* source) {
-      auto* plugin = const_cast<Sampling::Class::Exports*>(
-          static_cast<const Sampling::Class::Exports*>(source));
-      plugin->~Exports();
-      Core::Bibliotheca::remit(reinterpret_cast<U8*>(plugin));
-    }};
-  return TTX_DATA_SUCCESS;
+  return receive.receive(
+      receive.source, Ttx::Concept::Abstract::provide(plugin).get_query());
 }

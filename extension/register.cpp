@@ -22,8 +22,7 @@ static void initialize(godot::ModuleInitializationLevel level) {
     auto storage = Perimortem::Core::Bibliotheca::check_out(
         sizeof(Godot::Extension::Modules::Classes));
     classes = new (storage.ptr, Perimortem::Core::Placement::Construct)
-        Godot::Extension::Modules::Classes(
-            settings->get_setting_with_override("ttx/imports"));
+        Godot::Extension::Modules::Classes();
     const auto setting = godot::ProjectSettings::get_singleton()->get_setting(
         "ttx/classes", godot::Array());
     classes->load(setting);

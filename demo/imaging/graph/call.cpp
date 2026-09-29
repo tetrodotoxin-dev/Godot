@@ -9,6 +9,8 @@
 #include "perimortem/core/object.hpp"
 #include "perimortem/core/writer/textual.hpp"
 
+#include "ttx/concept/policies/none.h"
+
 using namespace Godot::Demo;
 using namespace Perimortem;
 

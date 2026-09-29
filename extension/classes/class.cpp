@@ -11,19 +11,19 @@
 #include "perimortem/core/null_terminated.hpp"
 
 #include "extension/classes/instance.hpp"
+#include "ttx/concept/capabilities/borrow.hpp"
+#include "ttx/concept/policies/none.hpp"
 
 using namespace Godot::Extension;
 using namespace Perimortem;
 
 Godot::Extension::Classes::Class::Class(
-    Ttx::Concept::Modules::Module module,
-    Ttx::Semantic::Ownership::Publication factory,
-    Ttx::Semantic::Ownership::Factory constructor,
+    Ttx::Concept::Policies::Borrowed factory,
+    Ttx::Concept::Capabilities::Create constructor,
     godot::String name,
     godot::String base,
     Memory::Dynamic::Vector<Method> methods)
-    : module(Core::Data::take(module)),
-      factory(Core::Data::take(factory)),
+    : factory(factory),
       constructor(constructor),
       name(name),
       base(base),
@@ -31,45 +31,15 @@ Godot::Extension::Classes::Class::Class(
   node = base == "Node" || godot::ClassDB::is_parent_class(base, "Node");
 }
 
-auto Godot::Extension::Classes::Class::get_query() const -> ttx_semantic_query {
-  return {
-    this,
-    [](const void* source, perimortem_uuid id,
-       ttx_storage requested) -> ttx_binding_status {
-      if (System::Uuid(id) !=
-          ::Godot::Extension::Contracts::Class::contract_id) {
-        return TTX_BINDING_UNSUPPORTED;
-      }
-
-      static const godot_class_operations operations = {
-        [](const void* source) {
-          return static_cast<ttx_data_status>(
-              const_cast<Class*>(static_cast<const Class*>(source))->publish());
-        },
-      };
-      return static_cast<ttx_binding_status>(
-          Ttx::Semantic::Negotiation::Binding::provide<
-              ::Godot::Extension::Contracts::Class>(
-              godot_class(source, &operations),
-              Ttx::Data::Form::Storage(requested)));
-    },
-    [](const void*, perimortem_uuid id) -> ttx_binding_status {
-      return System::Uuid(id) ==
-                     ::Godot::Extension::Contracts::Class::contract_id
-                 ? TTX_BINDING_SATISFIED
-                 : TTX_BINDING_UNSUPPORTED;
-    }};
-}
-
 auto Godot::Extension::Classes::Class::publish() -> Ttx::Data::Status {
   if (published || godot::ClassDB::class_exists(name)) {
     return Ttx::Data::Status::Invalid;
   }
 
-  // Preparation has already copied every registration name and retained the
-  // independent factory. Godot can now keep userdata pointers into this owner
-  // without borrowing the discovery publication that produced it.
-  GDExtensionClassCreationInfo5 info = {};
+  // Registration names and method descriptions live in this owner alongside
+  // the retained constructor. Godot can keep userdata pointers into that state
+  // for the registration's lifetime, including after discovery has ended.
+  GDExtensionClassCreationInfo5 info = GDExtensionClassCreationInfo5();
   info.is_exposed = true;
   info.class_userdata = this;
   info.create_instance_func = create;
@@ -93,48 +63,69 @@ auto Godot::Extension::Classes::Class::create(
     void* source,
     GDExtensionBool notify) -> GDExtensionObjectPtr {
   auto& type = *static_cast<Class*>(source);
-  return type.constructor.create().visit(
-      [&](Ttx::Semantic::Ownership::Publication& publication)
-          -> GDExtensionObjectPtr {
-        return Instance::create(type, Core::Data::take(publication))
-            .visit(
-                [&](Instance* instance) -> GDExtensionObjectPtr {
-                  // Constructing the native base is the first Godot side
-                  // effect. The provider and all method bindings are ready
-                  // before it can receive even a construction notification.
-                  ++type.instances;
-                  auto object =
-                      godot::gdextension_interface::classdb_construct_object2(
-                          type.base._native_ptr());
-                  if (!object) {
-                    instance->~Instance();
-                    Core::Bibliotheca::remit(reinterpret_cast<U8*>(instance));
-                    return nullptr;
-                  }
+  using namespace Ttx::Semantic::Negotiation;
+  GDExtensionObjectPtr object = nullptr;
+  auto receive = [&](Ttx::Concept::Abstract subject) {
+    subject.bind<Ttx::Concept::Capabilities::Borrow>().visit(
+        [&](Ttx::Concept::Capabilities::Borrow policy) -> Binding::Status {
+          return policy.borrow().visit(
+              [&](Ttx::Concept::Policies::Borrowed acquired)
+                  -> Binding::Status {
+                return Instance::create(type, acquired)
+                    .visit(
+                        [&](Instance* instance) -> Binding::Status {
+                          // Constructing the native base is the first Godot
+                          // side effect. The provider and all method bindings
+                          // are ready before it can receive even a construction
+                          // notification.
+                          ++type.instances;
+                          object = godot::gdextension_interface::
+                              classdb_construct_object2(
+                                  type.base._native_ptr());
+                          if (!object) {
+                            instance->~Instance();
+                            Core::Bibliotheca::remit(
+                                reinterpret_cast<U8*>(instance));
+                            return Ttx::Semantic::Negotiation::Binding::Status::
+                                Rejected;
+                          }
 
-                  godot::gdextension_interface::object_set_instance(
-                      object, type.name._native_ptr(), instance);
-                  if (notify) {
-                    static const auto method =
-                        godot::gdextension_interface::classdb_get_method_bind(
-                            godot::StringName("Object")._native_ptr(),
-                            godot::StringName("notification")._native_ptr(),
-                            4023243586);
-                    int64_t notification =
-                        godot::Object::NOTIFICATION_POSTINITIALIZE;
-                    bool reversed = false;
-                    const void* arguments[] = {&notification, &reversed};
-                    godot::gdextension_interface::object_method_bind_ptrcall(
-                        method, object, arguments, nullptr);
-                  }
+                          godot::gdextension_interface::object_set_instance(
+                              object, type.name._native_ptr(), instance);
+                          if (notify) {
+                            static const auto method = godot::
+                                gdextension_interface::classdb_get_method_bind(
+                                    godot::StringName("Object")._native_ptr(),
+                                    godot::StringName("notification")
+                                        ._native_ptr(),
+                                    4023243586);
+                            int64_t notification =
+                                godot::Object::NOTIFICATION_POSTINITIALIZE;
+                            bool reversed = false;
+                            const void* arguments[] = {
+                              &notification, &reversed};
+                            godot::gdextension_interface::
+                                object_method_bind_ptrcall(
+                                    method, object, arguments, nullptr);
+                          }
 
-                  return object;
-                },
-                [](Ttx::Data::Status) -> GDExtensionObjectPtr {
-                  return nullptr;
-                });
-      },
-      [](Ttx::Data::Status) -> GDExtensionObjectPtr { return nullptr; });
+                          return Binding::Status::Satisfied;
+                        },
+                        [](Ttx::Data::Status) {
+                          return Binding::Status::Rejected;
+                        });
+              },
+              [](Binding::Failure failure) {
+                return static_cast<Binding::Status>(failure);
+              });
+        },
+        [](Binding::Failure failure) {
+          return static_cast<Binding::Status>(failure);
+        });
+  };
+  const auto status = type.constructor.create(
+      Ttx::Concept::Policies::None::get_none(), receive);
+  return status == Binding::Status::Satisfied ? object : nullptr;
 }
 
 auto Godot::Extension::Classes::Class::destroy(
@@ -155,4 +146,5 @@ Godot::Extension::Classes::Class::~Class() {
     godot::gdextension_interface::classdb_unregister_extension_class(
         godot::gdextension_interface::library, name._native_ptr());
   }
+  factory.release();
 }

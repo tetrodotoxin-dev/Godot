@@ -9,7 +9,7 @@ using namespace Perimortem;
 using namespace Godot::Extension;
 
 auto Godot::Extension::Values::Frame::compile(
-    Ttx::Concept::Declarations::Callable::Frame source)
+    Ttx::Concept::Capabilities::Callable::Frame source)
     -> Utility::Result<Frame, Ttx::Data::Status> {
   using Ttx::Data::Status;
   using Ttx::Data::Form::Representation;

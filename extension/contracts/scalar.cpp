@@ -3,56 +3,58 @@
 
 #include "extension/contracts/scalar.hpp"
 
+#include "ttx/concept/policies/none.h"
 #include "ttx/data/form/compiled.hpp"
 
 using namespace Perimortem;
 using namespace Godot::Extension::Contracts;
 
 PERIMORTEM_C ttx_abstract lab_scalar_abstract(const lab_scalar* scalar) {
-  static const ttx_abstract_ops operations = {
-    [](const void* source, perimortem_uuid id) -> ttx_binding_status {
-      if (id.high == TTX_ABSTRACT_ID_HIGH && id.low == TTX_ABSTRACT_ID_LOW) {
-        return TTX_BINDING_SATISFIED;
-      }
+  static const ttx_abstract_ops operations = ttx_abstract_ops(
+      [](const void* source, perimortem_uuid id) -> ttx_binding_status {
+        if (id.high == TTX_ABSTRACT_ID_HIGH && id.low == TTX_ABSTRACT_ID_LOW) {
+          return TTX_BINDING_SATISFIED;
+        }
 
-      const auto& scalar = *static_cast<const lab_scalar*>(source);
-      const U64 roles[] = {
-        0, LAB_BOOLEAN_ID_LOW, LAB_INTEGER_ID_LOW, LAB_REAL_ID_LOW,
-        LAB_TEXT_ID_LOW};
-      return scalar.kind != LAB_SCALAR_EMPTY &&
-                     scalar.kind <= LAB_SCALAR_TEXT &&
-                     id.high == LAB_SCALAR_ID_HIGH &&
-                     id.low == roles[scalar.kind]
-                 ? TTX_BINDING_SATISFIED
-                 : TTX_BINDING_UNSUPPORTED;
-    },
-    [](const void* source, perimortem_uuid id,
-       ttx_storage requested) -> ttx_binding_status {
-      if (id.high == TTX_ABSTRACT_ID_HIGH && id.low == TTX_ABSTRACT_ID_LOW) {
-        const ttx_abstract api{source, &operations};
-        return ttx_binding_provide(
-            ttx_abstract_representation(), &api, requested);
-      }
+        const auto& scalar = *static_cast<const lab_scalar*>(source);
+        const U64 roles[] = {
+          0, LAB_BOOLEAN_ID_LOW, LAB_INTEGER_ID_LOW, LAB_REAL_ID_LOW,
+          LAB_TEXT_ID_LOW};
+        return scalar.kind != LAB_SCALAR_EMPTY &&
+                       scalar.kind <= LAB_SCALAR_TEXT &&
+                       id.high == LAB_SCALAR_ID_HIGH &&
+                       id.low == roles[scalar.kind]
+                   ? TTX_BINDING_SATISFIED
+                   : TTX_BINDING_UNKNOWN;
+      },
+      [](const void* source, perimortem_uuid id,
+         ttx_storage requested) -> ttx_binding_status {
+        if (id.high == TTX_ABSTRACT_ID_HIGH && id.low == TTX_ABSTRACT_ID_LOW) {
+          const ttx_abstract api = ttx_abstract(source, &operations);
+          return ttx_binding_provide(
+              ttx_abstract_representation(), &api, requested);
+        }
 
-      const auto& scalar = *static_cast<const lab_scalar*>(source);
-      const U64 roles[] = {
-        0, LAB_BOOLEAN_ID_LOW, LAB_INTEGER_ID_LOW, LAB_REAL_ID_LOW,
-        LAB_TEXT_ID_LOW};
-      if (scalar.kind <= LAB_SCALAR_TEXT && scalar.kind != LAB_SCALAR_EMPTY &&
-          id.high == LAB_SCALAR_ID_HIGH && id.low == roles[scalar.kind]) {
-        return ttx_binding_marker(requested);
-      }
+        const auto& scalar = *static_cast<const lab_scalar*>(source);
+        const U64 roles[] = {
+          0, LAB_BOOLEAN_ID_LOW, LAB_INTEGER_ID_LOW, LAB_REAL_ID_LOW,
+          LAB_TEXT_ID_LOW};
+        if (scalar.kind <= LAB_SCALAR_TEXT && scalar.kind != LAB_SCALAR_EMPTY &&
+            id.high == LAB_SCALAR_ID_HIGH && id.low == roles[scalar.kind]) {
+          return ttx_binding_marker(requested);
+        }
 
-      return TTX_BINDING_UNSUPPORTED;
-    },
-    [](const void* source) {
-      return static_cast<const lab_scalar*>(source)->name;
-    },
-    [](const void* source) -> ttx_abstract { return {source, &operations}; },
-    [](const void*, perimortem_view_bytes) { return ttx_none(); },
-    [](const void*, ttx_concept_visitor) {},
-  };
-  return {scalar, &operations};
+        return TTX_BINDING_UNKNOWN;
+      },
+      [](const void* source) {
+        return static_cast<const lab_scalar*>(source)->name;
+      },
+      [](const void* source) -> ttx_abstract {
+        return ttx_abstract(source, &operations);
+      },
+      [](const void*, perimortem_view_bytes) { return ttx_none(); },
+      [](const void*, ttx_concept_visitor) {});
+  return ttx_abstract(scalar, &operations);
 }
 
 PERIMORTEM_C const ttx_representation* lab_scalar_representation(
@@ -69,7 +71,8 @@ PERIMORTEM_C const ttx_representation* lab_scalar_representation(
   };
   static constexpr auto text = Schema::composite(
       positions, sizeof(perimortem_view_bytes), alignof(perimortem_view_bytes));
-  static constexpr auto empty = Schema::composite({}, 0, 1);
+  static constexpr auto empty =
+      Schema::composite(Core::View::Vector<Schema::Position>(), 0, 1);
   switch (static_cast<Scalar::Kind>(kind)) {
   case Scalar::Kind::Boolean:
     return &Ttx::Data::Form::Compiled<boolean>::get_representation();

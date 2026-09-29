@@ -10,20 +10,18 @@
 #include "perimortem/core/option.hpp"
 
 #include "cuda/contracts/buffer.hpp"
-#include "ttx/concept/modules/module.hpp"
-#include "ttx/semantic/ownership/publication.hpp"
+#include "ttx/concept/policies/borrowed.hpp"
 
 namespace Godot::Demo::Adapters::Cuda {
 
-// Godot retains an ordinary object while the CUDA publication owns its device
-// storage. Keeping a separate module reference makes the final release callable
-// even when the program Resource that allocated this buffer has disappeared.
+// This Godot object owns the Borrowed CUDA answer for its device storage.
+// Buffers remain usable after their creating Program is released. The host
+// import service keeps the supplying code loaded through resource destruction.
 class TtxCudaBuffer : public godot::RefCounted {
   GDCLASS(TtxCudaBuffer, godot::RefCounted)
  public:
-  static auto adopt(
-      Ttx::Concept::Modules::Module module,
-      Ttx::Semantic::Ownership::Publication publication)
+  ~TtxCudaBuffer() override;
+  static auto adopt(Ttx::Concept::Policies::Borrowed subject)
       -> godot::Ref<TtxCudaBuffer>;
   auto get_address() const -> U64;
   auto get_size() const -> int64_t;
@@ -34,8 +32,7 @@ class TtxCudaBuffer : public godot::RefCounted {
   static auto _bind_methods() -> void;
 
  private:
-  Perimortem::Core::Option<Ttx::Concept::Modules::Module> module;
-  Perimortem::Core::Option<Ttx::Semantic::Ownership::Publication> owner;
+  Perimortem::Core::Option<Ttx::Concept::Policies::Borrowed> owner;
   Perimortem::Core::Option<::Cuda::Contracts::Buffer> buffer;
 };
 

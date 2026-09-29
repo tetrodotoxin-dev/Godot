@@ -20,19 +20,22 @@ including a counter Node and a scalar sampling interface.
 
 ## Run locally
 
-The current native build targets Linux. It needs Bazel, Clang and Godot 4.7 or
-later. The Bazel module expects sibling checkouts of
-[Tetrodotoxin](https://github.com/tetrodotoxin-dev/Tetrodotoxin) and
-[CUDA](https://github.com/tetrodotoxin-dev/CUDA), named `tetrodotoxin` and `cuda`.
-It fetches the pinned Godot C++ bindings and PocketFFT dependency.
+Download the [Linux demo](https://github.com/tetrodotoxin-dev/Godot/releases/latest)
+and run `TTX-Lab` from the extracted folder. The CUDA download includes NVIDIA's
+compiler and FFT libraries and requires a compatible NVIDIA driver. The smaller
+CPU download runs the native CPU and GDScript providers.
+
+To build from source on Linux, install Python 3, Bazel and Godot 4.7 or later.
+Bazel downloads the pinned compiler, TTX and Perimortem SDKs, CUDA source release,
+Godot C++ bindings and PocketFFT dependency.
 
 ```sh
 demo/run.sh --cpu
 ```
 
-For CUDA, install the NVIDIA driver and CUDA toolkit, then run
-`demo/run.sh`. `CUDA_ROOT` selects the toolkit location and defaults to
-`/opt/cuda`. The CPU path works without a CUDA installation.
+For CUDA, install a compatible NVIDIA driver and run `demo/run.sh`. Bazel
+acquires the CUDA headers and libraries. The addon includes the compiler and FFT
+runtime libraries used by its providers. The CPU path works without CUDA.
 
 Use `CONFIGURATION=debug` for a debug build. The bridge targets Godot 4.7's
 API and is checked against the installed Godot 4.7.2 engine.
@@ -41,7 +44,7 @@ API and is checked against the installed Godot 4.7.2 engine.
 
 `extension/` is the reusable TTX class loader. It negotiates exported class
 and callable declarations, converts Godot values, and retains the resulting
-runtime factories and bindings. It has no image, sampling or CUDA dependency.
+constructors and method bindings. It has no image, sampling or CUDA dependency.
 Build `//extension:addon` to obtain that bridge on its own.
 
 `demo/` contains the scene and all application behavior: image operations,

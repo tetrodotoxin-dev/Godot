@@ -7,22 +7,24 @@
 
 #include "extension/classes/class.hpp"
 #include "extension/contracts/lifecycle.hpp"
-#include "ttx/semantic/ownership/publication.hpp"
+#include "ttx/concept/policies/borrowed.hpp"
 #include "ttx/semantic/realization/invocation.hpp"
 
 namespace Godot::Extension::Classes {
 
-// Instance owns runtime state and the callable bindings acquired during its
-// construction. The declaring graph has already disappeared. Godot callbacks
-// use the ready slots, then destroy this publication while its Class still
-// retains the provider's code and factory.
+// Instance owns a Borrowed provider answer and the operations bound during
+// construction. Godot callbacks invoke those operations directly. Destruction
+// releases the answer while the host import service keeps its code loaded.
 class Instance {
  public:
-  static auto create(
-      Class& type,
-      Ttx::Semantic::Ownership::Publication publication)
+  Instance(const Instance&) = delete;
+  auto operator=(const Instance&) -> Instance& = delete;
+  static auto create(Class& type, Ttx::Concept::Policies::Borrowed publication)
       -> Perimortem::Utility::Result<Instance*, Ttx::Data::Status>;
-  ~Instance() { type.release_instance(); }
+  ~Instance() {
+    publication.release();
+    type.release_instance();
+  }
   auto get_invocation(U32 index) const
       -> const Ttx::Semantic::Realization::Invocation& {
     return bindings[index];
@@ -33,17 +35,17 @@ class Instance {
  private:
   Instance(
       Class& type,
-      Ttx::Semantic::Ownership::Publication publication,
+      Ttx::Concept::Policies::Borrowed publication,
       Perimortem::Memory::Dynamic::Vector<
           Ttx::Semantic::Realization::Invocation> bindings,
       Perimortem::Core::Option<::Godot::Extension::Contracts::Lifecycle>
           lifecycle)
       : type(type),
-        publication(Perimortem::Core::Data::take(publication)),
+        publication(publication),
         bindings(Perimortem::Core::Data::take(bindings)),
         lifecycle(lifecycle) {}
   Class& type;
-  Ttx::Semantic::Ownership::Publication publication;
+  Ttx::Concept::Policies::Borrowed publication;
   Perimortem::Memory::Dynamic::Vector<Ttx::Semantic::Realization::Invocation>
       bindings;
   Perimortem::Core::Option<::Godot::Extension::Contracts::Lifecycle> lifecycle;

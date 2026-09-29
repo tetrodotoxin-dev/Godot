@@ -5,15 +5,18 @@
 
 #include "perimortem/core/bibliotheca.hpp"
 #include "perimortem/core/null_terminated.hpp"
+#include "perimortem/core/object.hpp"
 
 #include "perimortem/memory/dynamic/bytes.hpp"
 
 #include "demo/imaging/contracts/invert.hpp"
 #include "demo/imaging/contracts/render.hpp"
+#include "demo/sampling/contracts/samples.hpp"
 #include "extension/contracts/scalar.hpp"
+#include "ttx/concept/capabilities/borrow.hpp"
 #include "ttx/data/form/compiled.hpp"
 #include "ttx/semantic/flows/copy.hpp"
-#include "ttx/semantic/ownership/factory.hpp"
+#include "ttx/semantic/negotiation/receiver.hpp"
 #include "ttx/semantic/realization/invocation.hpp"
 #include "ttx/semantic/realization/simulacra.hpp"
 
@@ -89,6 +92,13 @@ class RenderInstance {
       }};
   }
 
+  auto retain() const -> void { ++references; }
+  auto release() const -> void {
+    if (!--references) {
+      delete this;
+    }
+  }
+
   ~RenderInstance() {
     if (image.operations) {
       image.operations->release(image.source);
@@ -96,41 +106,62 @@ class RenderInstance {
     provider.operations->release(provider.source);
   }
 
-  auto get_query() const -> ttx_semantic_query {
-    return {
-      this,
-      [](const void* source, perimortem_uuid id,
-         ttx_storage requested) -> ttx_binding_status {
-        if (id.high != LAB_RENDER_METHOD_HIGH ||
-            id.low < LAB_RENDER_METHOD_LOW ||
-            id.low >= LAB_RENDER_METHOD_LOW + 6) {
-          return TTX_BINDING_UNSUPPORTED;
-        }
-        const auto& api = static_cast<const RenderInstance*>(source)
-                              ->calls[id.low - LAB_RENDER_METHOD_LOW];
-        return ttx_binding_provide(
-            ttx_invocation_representation(), &api, requested);
-      },
-      [](const void*, perimortem_uuid id) -> ttx_binding_status {
-        return id.high == LAB_RENDER_METHOD_HIGH &&
-                       id.low >= LAB_RENDER_METHOD_LOW &&
-                       id.low < LAB_RENDER_METHOD_LOW + 6
-                   ? TTX_BINDING_SATISFIED
-                   : TTX_BINDING_UNSUPPORTED;
-      }};
+  auto get_data() const -> Core::View::Bytes { return Core::View::Bytes(); }
+  auto borrow() const -> Utility::Result<
+      Ttx::Concept::Policies::Borrowed,
+      Ttx::Semantic::Negotiation::Binding::Failure> {
+    retain();
+    return Ttx::Concept::Policies::Borrowed::provide(*this);
+  }
+  auto supports(System::Uuid id) const
+      -> Ttx::Semantic::Negotiation::Binding::Status {
+    using namespace Ttx::Concept;
+    using namespace Ttx::Semantic::Negotiation;
+    return id == Capabilities::Borrow::contract_id ||
+                   id == Policies::Borrowed::contract_id ||
+                   (static_cast<perimortem_uuid>(id).high ==
+                        LAB_RENDER_METHOD_HIGH &&
+                    static_cast<perimortem_uuid>(id).low >=
+                        LAB_RENDER_METHOD_LOW &&
+                    static_cast<perimortem_uuid>(id).low <
+                        LAB_RENDER_METHOD_LOW + 6)
+               ? Binding::Status::Satisfied
+               : Binding::Status::Unknown;
+  }
+  auto bind_interface(System::Uuid id, Ttx::Data::Form::Storage target) const
+      -> Ttx::Semantic::Negotiation::Binding::Status {
+    using namespace Ttx::Concept;
+    using namespace Ttx::Semantic::Negotiation;
+    if (id == Capabilities::Borrow::contract_id) {
+      return Binding::provide<Capabilities::Borrow>(
+          Capabilities::Borrow::provide(*this).get_abi(), target);
+    }
+    if (id == Policies::Borrowed::contract_id) {
+      return Binding::provide<Policies::Borrowed>(
+          Policies::Borrowed::provide(*this).get_abi(), target);
+    }
+    if (static_cast<perimortem_uuid>(id).high != LAB_RENDER_METHOD_HIGH ||
+        static_cast<perimortem_uuid>(id).low < LAB_RENDER_METHOD_LOW ||
+        static_cast<perimortem_uuid>(id).low >= LAB_RENDER_METHOD_LOW + 6) {
+      return Binding::Status::Unknown;
+    }
+    return static_cast<Binding::Status>(ttx_binding_provide(
+        ttx_invocation_representation(),
+        &calls[static_cast<perimortem_uuid>(id).low - LAB_RENDER_METHOD_LOW],
+        target.get_abi()));
   }
 
  private:
-  // These helpers perform one transaction on the same current image and its
-  // diagnostic. Keeping them with the instance makes commit ordering explicit
-  // without exposing mutable backend state to the declaration policy.
+  // Each operation observes the instance's current image. Upload publishes a
+  // completed replacement before returning the previous image, so callbacks
+  // from its release observe the committed state.
   auto upload(const render_upload& input) -> U8 {
     if (input.width <= 0 || input.height <= 0 || input.width > U32(-1) ||
         input.height > U32(-1)) {
       error = "Image dimensions are outside the provider range."_view;
       return 0;
     }
-    image_object next = {};
+    image_object next = image_object();
     const auto failed = provider.operations->create(
         provider.source, input.width, input.height, input.pixels.data,
         input.pixels.size, &next);
@@ -198,89 +229,112 @@ class RenderInstance {
     return static_cast<ttx_data_status>(result);
   }
 
+  mutable Count references = 1;
   image_provider provider;
-  image_object image = {};
+  image_object image = image_object();
   Memory::Dynamic::Bytes observed;
   Memory::Dynamic::Bytes error;
   ttx_invocation calls[6];
 };
 
-struct RenderFactory {
-  Imaging::Render::Module::OpenImages open;
-};
+auto Imaging::Render::Runtime::create(
+    Runtime::OpenImages images,
+    Runtime::OpenSamples samples,
+    Ttx::Semantic::Negotiation::Query capabilities) -> Runtime& {
+  static const Core::Object<>::Descriptor descriptor(
+      sizeof(Runtime), alignof(Runtime),
+      [](U8* source) { reinterpret_cast<Runtime*>(source)->~Runtime(); });
+  return *new (
+      Core::Object<>::create(descriptor).get_payload(),
+      Core::Placement::Construct) Runtime(images, samples, capabilities);
+}
 
-auto Imaging::Render::Runtime::emit(
-    Module::OpenImages open,
-    ttx_publication* output) -> ttx_data_status {
-  auto memory = Core::Bibliotheca::check_out(sizeof(RenderFactory));
-  auto* factory =
-      new (memory.ptr, Core::Placement::Construct) RenderFactory(open);
-  *output = {
-    {factory,
-     [](const void* source, perimortem_uuid id,
-        ttx_storage requested) -> ttx_binding_status {
-       if (id.high == LAB_RENDER_PROVIDER_ID_HIGH &&
-           id.low == LAB_RENDER_PROVIDER_ID_LOW) {
-         static const render_provider_operations operations = {
-           [](const void* source, image_provider* output) {
-             return static_cast<const RenderFactory*>(source)->open(output);
-           },
-         };
-         const render_api api = {source, &operations};
-         return static_cast<ttx_binding_status>(
-             Ttx::Semantic::Negotiation::Binding::provide(
-                 api,
-                 Ttx::Data::Form::Compiled<Ttx::Data::Form::Native<
-                     render_api>::reference>::get_representation(),
-                 Ttx::Data::Form::Storage(requested)));
-       }
-       if (System::Uuid(id) == Ttx::Semantic::Ownership::Factory::contract_id) {
-         static const ttx_factory_operations operations = {
-           [](const void* source, ttx_publication* output) -> ttx_data_status {
-             image_provider provider = {};
-             const auto failed =
-                 static_cast<const RenderFactory*>(source)->open(&provider);
-             if (failed.size) {
-               return TTX_DATA_IO_ERROR;
+Imaging::Render::Runtime::~Runtime() {
+  if (compute) {
+    compute->release();
+  }
+}
+
+auto Imaging::Render::Runtime::retain() const -> void {
+  Core::Object<>(reinterpret_cast<U8*>(const_cast<Runtime*>(this))).retain();
+}
+
+auto Imaging::Render::Runtime::create_instance(
+    void* receiver,
+    void (*receive)(void*, ttx_abstract)) const
+    -> Ttx::Semantic::Negotiation::Binding::Status {
+  image_provider provider = image_provider();
+  if (images(&provider).size) {
+    return Ttx::Semantic::Negotiation::Binding::Status::Rejected;
+  }
+  auto* instance = new RenderInstance(provider);
+  receive(receiver, Ttx::Concept::Abstract::provide(*instance).get_abi());
+  instance->release();
+  return Ttx::Semantic::Negotiation::Binding::Status::Satisfied;
+}
+
+auto Imaging::Render::Runtime::release() const -> void {
+  Core::Object<>(reinterpret_cast<U8*>(const_cast<Runtime*>(this))).release();
+}
+
+auto Imaging::Render::Runtime::get_query() const
+    -> Ttx::Semantic::Negotiation::Query {
+  using namespace Ttx::Semantic::Negotiation;
+  return Query(
+      {this,
+       [](const void* source, perimortem_uuid id,
+          ttx_storage requested) -> ttx_binding_status {
+         const auto& runtime = *static_cast<const Runtime*>(source);
+         if (System::Uuid(id) == Imaging::Contracts::Render::contract_id) {
+           static const render_provider_operations operations =
+               render_provider_operations(
+                   [](const void* source, image_provider* output) {
+                     return static_cast<const Runtime*>(source)->images(output);
+                   });
+           return static_cast<ttx_binding_status>(
+               Binding::provide<Imaging::Contracts::Render>(
+                   render_api(source, &operations),
+                   Ttx::Data::Form::Storage(requested)));
+         }
+         if (runtime.samples &&
+             System::Uuid(id) == Sampling::Contracts::Samples::contract_id) {
+           if (!runtime.compute) {
+             auto acquire = [&](Query query) -> Binding::Status {
+               return query.bind<Ttx::Concept::Capabilities::Borrow>().visit(
+                   [&](Ttx::Concept::Capabilities::Borrow policy) {
+                     return policy.borrow().visit(
+                         [&](Ttx::Concept::Policies::Borrowed acquired) {
+                           runtime.compute = acquired;
+                           return Binding::Status::Satisfied;
+                         },
+                         [](Binding::Failure failure) {
+                           return static_cast<Binding::Status>(failure);
+                         });
+                   },
+                   [](Binding::Failure failure) {
+                     return static_cast<Binding::Status>(failure);
+                   });
+             };
+             const auto status = runtime.samples(Receiver(acquire).get_abi());
+             if (status != TTX_BINDING_SATISFIED) {
+               return status;
              }
-             auto memory = Core::Bibliotheca::check_out(sizeof(RenderInstance));
-             auto* instance = new (memory.ptr, Core::Placement::Construct)
-                 RenderInstance(provider);
-             *output = {
-               instance->get_query(), [](const void* source) {
-                 auto* instance = const_cast<RenderInstance*>(
-                     static_cast<const RenderInstance*>(source));
-                 instance->~RenderInstance();
-                 Core::Bibliotheca::remit(reinterpret_cast<U8*>(instance));
-               }};
-             return TTX_DATA_SUCCESS;
-           },
-         };
-         const ttx_factory api = {source, &operations};
-         return static_cast<ttx_binding_status>(
-             Ttx::Semantic::Negotiation::Binding::provide(
-                 api,
-                 Ttx::Data::Form::Compiled<Ttx::Data::Form::Native<
-                     ttx_factory>::reference>::get_representation(),
-                 Ttx::Data::Form::Storage(requested)));
-       }
-       return TTX_BINDING_UNSUPPORTED;
-     },
-     [](const void*, perimortem_uuid id) -> ttx_binding_status {
-       return System::Uuid(id) ==
-                          Ttx::Semantic::Ownership::Factory::contract_id ||
-                      (id.high == LAB_RENDER_PROVIDER_ID_HIGH &&
-                       id.low == LAB_RENDER_PROVIDER_ID_LOW)
-                  ? TTX_BINDING_SATISFIED
-                  : TTX_BINDING_UNSUPPORTED;
-     }},
-    [](const void* source) {
-      auto* factory =
-          const_cast<RenderFactory*>(static_cast<const RenderFactory*>(source));
-      factory->~RenderFactory();
-      Core::Bibliotheca::remit(reinterpret_cast<U8*>(factory));
-    }};
-  return TTX_DATA_SUCCESS;
+           }
+           return static_cast<ttx_binding_status>(
+               runtime.compute->bind_interface(
+                   System::Uuid(id), Ttx::Data::Form::Storage(requested)));
+         }
+         return TTX_BINDING_UNKNOWN;
+       },
+       [](const void* source, perimortem_uuid id) -> ttx_binding_status {
+         const auto& runtime = *static_cast<const Runtime*>(source);
+         return System::Uuid(id) == Imaging::Contracts::Render::contract_id ||
+                        (runtime.samples &&
+                         System::Uuid(id) ==
+                             Sampling::Contracts::Samples::contract_id)
+                    ? TTX_BINDING_SATISFIED
+                    : TTX_BINDING_UNKNOWN;
+       }});
 }
 
 auto Imaging::Render::Runtime::input(U32 method)

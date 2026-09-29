@@ -9,25 +9,36 @@ using namespace Godot::Demo;
 using namespace Perimortem;
 
 auto Sampling::Class::Sampler::configure(Core::View::Bytes provider) -> bool {
-  return imports.open(provider).visit(
-      [&](Ttx::Concept::Modules::Module& module) {
-        return Godot::Demo::Sampling::Function::open(
-                   Core::Data::take(module), host)
-            .visit(
-                [&](Godot::Demo::Sampling::Function& value) {
-                  function = Core::Data::take(value);
-                  error.clear();
-                  return true;
-                },
-                [&](Core::View::Bytes message) {
-                  error = message;
-                  return false;
-                });
-      },
-      [&](Ttx::Data::Status) {
-        error = "The host could not import the requested sampling module."_view;
-        return false;
-      });
+  using namespace Ttx::Semantic::Negotiation;
+  Core::Option<Sampling::Function> replacement;
+  auto receive = [&](Ttx::Concept::Abstract subject) {
+    Sampling::Function::open(subject.get_query())
+        .visit(
+            [&](Sampling::Function& value) {
+              replacement = Core::Data::take(value);
+              return Binding::Status::Satisfied;
+            },
+            [&](Core::View::Bytes failure) {
+              error = failure;
+              return Binding::Status::Rejected;
+            });
+  };
+  const perimortem_view_bytes input =
+      perimortem_view_bytes(provider.get_data(), provider.get_size());
+  const auto status = imports.visit(
+      &input,
+      Ttx::Data::Form::Compiled<Ttx::Data::Form::Native<
+          perimortem_view_bytes>::reference>::get_representation(),
+      receive);
+  if (status != Binding::Status::Satisfied || !replacement) {
+    if (status == Binding::Status::Unknown) {
+      error = "The host does not recognize this sampling import."_view;
+    }
+    return false;
+  }
+  function = Core::Data::take(*replacement);
+  error.clear();
+  return true;
 }
 
 auto Sampling::Class::Sampler::count(S64 seed, S64 first, S64 size) -> S64 {

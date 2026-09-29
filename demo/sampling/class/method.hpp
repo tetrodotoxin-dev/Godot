@@ -4,7 +4,7 @@
 #pragma once
 
 #include "ttx/concept/abstract.hpp"
-#include "ttx/concept/declarations/callable.hpp"
+#include "ttx/concept/capabilities/callable.hpp"
 
 namespace Godot::Demo::Sampling::Class {
 
@@ -22,29 +22,29 @@ class Method {
   auto supports(Perimortem::System::Uuid id) const
       -> Ttx::Semantic::Negotiation::Binding::Status {
     using Ttx::Semantic::Negotiation::Binding::Status;
-    return id == Ttx::Concept::Declarations::Callable::contract_id
+    return id == Ttx::Concept::Capabilities::Callable::contract_id
                ? Status::Satisfied
-               : Status::Unsupported;
+               : Status::Unknown;
   }
 
   auto bind_interface(
       Perimortem::System::Uuid requested,
       Ttx::Data::Form::Storage target) const
       -> Ttx::Semantic::Negotiation::Binding::Status {
-    if (requested == Ttx::Concept::Declarations::Callable::contract_id) {
-      static const ttx_callable_operations operations = {
-        [](const void* source,
-           ttx_callable_description* output) -> ttx_binding_status {
-          *output = static_cast<const Method*>(source)->description;
-          return TTX_BINDING_SATISFIED;
-        },
-      };
+    if (requested == Ttx::Concept::Capabilities::Callable::contract_id) {
+      static const ttx_callable_operations operations = ttx_callable_operations(
+          *Ttx::Concept::Abstract::provide(*this).get_abi().operations,
+          [](const void* source,
+             ttx_callable_description* output) -> ttx_binding_status {
+            *output = static_cast<const Method*>(source)->description;
+            return TTX_BINDING_SATISFIED;
+          });
       return Ttx::Semantic::Negotiation::Binding::provide<
-          Ttx::Concept::Declarations::Callable>(
+          Ttx::Concept::Capabilities::Callable>(
           ttx_callable(this, &operations), target);
     }
 
-    return Ttx::Semantic::Negotiation::Binding::Status::Unsupported;
+    return Ttx::Semantic::Negotiation::Binding::Status::Unknown;
   }
 
  private:

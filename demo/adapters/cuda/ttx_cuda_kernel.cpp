@@ -17,22 +17,27 @@ auto Godot::Demo::Adapters::Cuda::TtxCudaKernel::_bind_methods() -> void {
 }
 
 auto Godot::Demo::Adapters::Cuda::TtxCudaKernel::adopt(
-    Ttx::Concept::Modules::Module module,
-    Ttx::Semantic::Ownership::Publication publication,
+    Ttx::Concept::Policies::Borrowed subject,
     const Ttx::Data::Form::Representation& form,
     Memory::Dynamic::Vector<Argument> arguments) -> godot::Ref<TtxCudaKernel> {
+  using namespace Ttx::Semantic::Negotiation;
   godot::Ref<TtxCudaKernel> result;
-  publication.get_query().bind<::Cuda::Contracts::Kernel>().visit(
-      [&](::Cuda::Contracts::Kernel kernel) {
+  subject.bind<::Cuda::Contracts::Kernel>().visit(
+      [&](::Cuda::Contracts::Kernel api) {
         result.instantiate();
-        result->module = Core::Data::take(module);
-        result->owner = Core::Data::take(publication);
-        result->kernel = kernel;
+        result->owner = subject;
+        result->kernel = api;
         result->form = Memory::Dynamic::Bytes(form.get_bytes());
         result->arguments = Core::Data::take(arguments);
       },
-      [](Ttx::Semantic::Negotiation::Binding::Failure) {});
+      [&](Binding::Failure) { subject.release(); });
   return result;
+}
+
+Godot::Demo::Adapters::Cuda::TtxCudaKernel::~TtxCudaKernel() {
+  if (owner) {
+    owner->release();
+  }
 }
 
 // The engine supplies signed integers and double precision values. Narrowing
@@ -141,9 +146,9 @@ auto Godot::Demo::Adapters::Cuda::TtxCudaKernel::launch(
     }
   }
 
-  const cuda_launch geometry{U32(grid.x),      U32(grid.y),  U32(grid.z),
-                             U32(block.x),     U32(block.y), U32(block.z),
-                             U32(shared_bytes)};
+  const cuda_launch geometry = cuda_launch(
+      U32(grid.x), U32(grid.y), U32(grid.z), U32(block.x), U32(block.y),
+      U32(block.z), U32(shared_bytes));
 
   const auto status = kernel->launch(
       geometry, Ttx::Data::Form::Storage(

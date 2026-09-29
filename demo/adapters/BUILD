@@ -8,7 +8,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "imaging",
     srcs = glob(["imaging/**/*.cpp"]),
-    hdrs = glob(["imaging/**/*.hpp"]),
+    hdrs = glob(["imaging/**/*.hpp"]) + ["imports.hpp"],
     copts = [
         "-fvisibility=hidden",
         "-frtti",
@@ -27,7 +27,7 @@ cc_library(
 cc_library(
     name = "cuda",
     srcs = glob(["cuda/*.cpp"]),
-    hdrs = glob(["cuda/*.hpp"]),
+    hdrs = glob(["cuda/*.hpp"]) + ["imports.hpp"],
     copts = [
         "-fvisibility=hidden",
         "-frtti",

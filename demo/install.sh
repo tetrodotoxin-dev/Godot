@@ -28,8 +28,11 @@ done < <(rg --files --hidden --null "$staging")
 # Policy moved from a Node script to a Resource. Leaving the old generated
 # script installed would register the same Godot class twice during upgrade.
 rm -f -- "$addon_root/scene/policy.gd" "$addon_root/scene/policy.gd.uid"
-for library in libcuda_provider.so libttx_cuda.so; do
-    if ! tar -tf "$archive" | rg -Fxq "$library"; then
+inventory=$(tar -tf "$archive")
+for path in "$addon_root"/libcuda_provider.so "$addon_root"/libttx_cuda.so \
+    "$addon_root"/libnvrtc*.so.* "$addon_root"/libcufft.so.* "$addon_root"/NVIDIA-*-LICENSE.txt; do
+    library=${path##*/}
+    if ! rg -Fxq "$library" <<< "$inventory"; then
         rm -f -- "$addon_root/$library"
     fi
 done

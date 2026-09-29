@@ -7,67 +7,81 @@
 
 using namespace Godot::Extension;
 using namespace Perimortem;
+using namespace Ttx::Semantic::Negotiation;
 
-auto Godot::Extension::Modules::Imports::open(Core::View::Bytes name) const
-    -> Utility::Result<Ttx::Concept::Modules::Module, Ttx::Data::Status> {
-  using Result =
-      Utility::Result<Ttx::Concept::Modules::Module, Ttx::Data::Status>;
+auto Modules::Imports::open(Core::View::Bytes name) const
+    -> Utility::Result<Library, Ttx::Data::Status> {
+  using Result = Utility::Result<Library, Ttx::Data::Status>;
   const auto key = godot::String::utf8(
       reinterpret_cast<const char*>(name.get_data()), name.get_size());
+  const godot::Dictionary paths =
+      godot::ProjectSettings::get_singleton()->get_setting_with_override(
+          "ttx/imports");
   if (!paths.has(key)) {
     return Ttx::Data::Status::Unsupported;
   }
-
-  auto path = godot::ProjectSettings::get_singleton()
-                  ->globalize_path(paths[key])
-                  .utf8();
+  const auto location =
+      godot::ProjectSettings::get_singleton()->globalize_path(paths[key]);
+  // Configuration selects the current artifact. Existing bindings keep their
+  // earlier library, even when a project replaces or removes the alias.
+  for (const auto& entry : loaded.get_view()) {
+    if (entry.path == location) {
+      return entry.library;
+    }
+  }
+  const auto path = location.utf8();
   Memory::Allocator::Arena errors;
-  return Ttx::Concept::Modules::Module::load(
-             Core::View::Bytes(
-                 reinterpret_cast<const U8*>(path.get_data()), path.length()),
+  return Library::open(
+             {reinterpret_cast<const U8*>(path.get_data()),
+              Count(path.length())},
              errors)
       .visit(
-          [](Ttx::Concept::Modules::Module& module) -> Result {
-            return Core::Data::take(module);
+          [&](Library& library) -> Result {
+            loaded.emplace(Loaded(location, library));
+            return library;
           },
           [](Core::View::Bytes) -> Result {
             return Ttx::Data::Status::IoError;
           });
 }
 
-auto Godot::Extension::Modules::Imports::get_query() const
-    -> Ttx::Semantic::Negotiation::Query {
-  return Ttx::Semantic::Negotiation::Query(
-      {this,
-       [](const void* source, perimortem_uuid id,
-          ttx_storage requested) -> ttx_binding_status {
-         if (System::Uuid(id) != Ttx::Concept::Modules::Import::contract_id) {
-           return TTX_BINDING_UNSUPPORTED;
-         }
+auto Modules::Imports::load(
+    Core::View::Bytes name,
+    void* receiver,
+    void (*receive)(void*, ttx_abstract)) const -> Binding::Status {
+  return open(name).visit(
+      [&](Library& library) {
+        auto observe = [&](Query query) {
+          return query.bind<Ttx::Concept::Abstract>().visit(
+              [&](Ttx::Concept::Abstract subject) {
+                receive(receiver, subject.get_abi());
+                return Binding::Status::Satisfied;
+              },
+              [](Binding::Failure failure) {
+                return static_cast<Binding::Status>(failure);
+              });
+        };
+        return library.visit(get_query(), Receiver(observe));
+      },
+      [](Ttx::Data::Status status) {
+        return status == Ttx::Data::Status::Unsupported
+                   ? Binding::Status::Unknown
+                   : Binding::Status::Rejected;
+      });
+}
 
-         static const ttx_import_operations operations = {
-           [](const void* source, perimortem_view_bytes name,
-              ttx_module* output) -> ttx_data_status {
-             return static_cast<const Imports*>(source)
-                 ->open(Core::View::Bytes(name.data, name.size))
-                 .visit(
-                     [&](Ttx::Concept::Modules::Module& module)
-                         -> ttx_data_status {
-                       *output = module.take();
-                       return TTX_DATA_SUCCESS;
-                     },
-                     [](Ttx::Data::Status status) {
-                       return static_cast<ttx_data_status>(status);
-                     });
-           },
-         };
-         const ttx_import api = {source, &operations};
-         return ttx_binding_provide(
-             ttx_import_representation(), &api, requested);
-       },
-       [](const void*, perimortem_uuid id) -> ttx_binding_status {
-         return System::Uuid(id) == Ttx::Concept::Modules::Import::contract_id
-                    ? TTX_BINDING_SATISFIED
-                    : TTX_BINDING_UNSUPPORTED;
-       }});
+auto Modules::Imports::supports(System::Uuid id) const -> Binding::Status {
+  return id == Ttx::Concept::Capabilities::Import::contract_id
+             ? Binding::Status::Satisfied
+             : Binding::Status::Unknown;
+}
+
+auto Modules::Imports::bind_interface(
+    System::Uuid id,
+    Ttx::Data::Form::Storage target) const -> Binding::Status {
+  return id == Ttx::Concept::Capabilities::Import::contract_id
+             ? Binding::provide<Ttx::Concept::Capabilities::Import>(
+                   Ttx::Concept::Capabilities::Import::provide(*this).get_abi(),
+                   target)
+             : Binding::Status::Unknown;
 }

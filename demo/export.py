@@ -54,45 +54,33 @@ def publish_sources(demo, engine_source, template):
     # Only product inputs belong in the public source download. Git supplies
     # tracked and new source paths, while this allowlist excludes local notes,
     # credentials, build outputs and unrelated toolchain applications.
-    roots = {
-        'godot': ('extension', 'demo'),
-        'ttx': ('data', 'semantic', 'concept', 'toolchain', 'validation'),
-        'cuda': ('cuda', 'build', 'toolchain', 'validation'),
-    }
     root_files = {'.bazelrc', '.bazelversion', 'BUILD', 'BUILD.bazel',
-                  'MODULE.bazel', 'MODULE.bazel.lock', 'LICENSE'}
+                  'MODULE.bazel', 'MODULE.bazel.lock', 'LICENSE', 'README.md'}
     entries = []
     manifest = {'repositories': {}, 'template_sha256': hashlib.sha256(
         template.read_bytes()).hexdigest()}
-    snapshot = None
-    if not (REPO / '.git').exists():
+    if (REPO / '.git').exists():
+        paths = subprocess.check_output(
+            ['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+            cwd=REPO).decode().split('\0')
+        head = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
+    else:
         snapshot = json.loads((REPO.parent / 'manifest.json').read_text())
-    for name, directories in roots.items():
-        repo = REPO.parent / name
-        if snapshot:
-            paths = [item['path'] for item in snapshot['repositories'][name]['files']]
-            head = snapshot['repositories'][name]['head']
-        else:
-            paths = subprocess.check_output(
-                ['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'],
-                cwd=repo).decode().split('\0')
-            head = subprocess.check_output(
-                ['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
-        files = []
-        for name_in_repo in sorted(set(paths) - {''}):
-            path = repo / name_in_repo
-            if (name_in_repo not in root_files and
-                    Path(name_in_repo).parts[0] not in directories):
-                continue
-            if not path.is_file():
-                continue
-            data = path.read_bytes()
-            entries.append((f'{name}/{name_in_repo}', data, bool(path.stat().st_mode & 0o111)))
-            files.append({'path': name_in_repo, 'sha256': hashlib.sha256(data).hexdigest()})
-        manifest['repositories'][name] = {
-            'head': head,
-            'files': files,
-        }
+        repository = snapshot['repositories']['godot']
+        paths = [item['path'] for item in repository['files']]
+        head = repository['head']
+    files = []
+    for name in sorted(set(paths) - {''}):
+        path = REPO / name
+        if (name not in root_files and Path(name).parts[0] not in ('extension', 'demo')):
+            continue
+        if not path.is_file():
+            continue
+        data = path.read_bytes()
+        entries.append((f'godot/{name}', data, bool(path.stat().st_mode & 0o111)))
+        files.append({'path': name, 'sha256': hashlib.sha256(data).hexdigest()})
+    manifest['repositories']['godot'] = {'head': head, 'files': files}
 
     source = demo / 'source'
     source.mkdir()
@@ -111,14 +99,16 @@ def publish_sources(demo, engine_source, template):
         ('pocketfft/' + path.name, path.read_bytes(), False)
         for path in sorted(pocketfft)
     ])
+    runtimes = bazel_files(['@ttx//:build', '@perimortem//:build'], WEB_CONFIG)
     notices = {
         'Lab-MIT.txt': REPO / 'LICENSE',
-        'TTX-MIT.txt': REPO.parent / 'ttx/LICENSE',
         'Godot-MIT.txt': engine_source / 'LICENSE.txt',
         'Godot.txt': engine_source / 'COPYRIGHT.txt',
         'Godot-CPP-MIT.txt': sdk_license,
         'PocketFFT-BSD.txt': next(path for path in pocketfft if path.name == 'LICENSE.md'),
     }
+    for runtime in runtimes:
+        notices[runtime.stem + '-LICENSE.txt'] = runtime.parent.parent / 'LICENSE'
     licenses = demo / 'licenses'
     licenses.mkdir()
     for name, path in notices.items():

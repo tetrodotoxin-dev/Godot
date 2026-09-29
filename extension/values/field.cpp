@@ -35,18 +35,14 @@ auto Godot::Extension::Values::Field::compile(
   const godot::Variant::Type types[] = {
     godot::Variant::BOOL, godot::Variant::INT, godot::Variant::FLOAT,
     godot::Variant::STRING, godot::Variant::PACKED_BYTE_ARRAY};
+  // These are independent semantic questions. An unknown or refused Boolean
+  // question says nothing about whether this subject supplies Integer or Text.
+  // The first accepted role selects this exporter's conversion policy.
   for (Count i = 0; i != 5; ++i) {
     const auto answer = subject.get_query().supports(
         System::Uuid(LAB_SCALAR_ID_HIGH, roles[i]));
     const bool found =
         answer == Ttx::Semantic::Negotiation::Binding::Status::Satisfied;
-    Ttx::Data::Status status = Ttx::Data::Status::Unsupported;
-    if (answer == Ttx::Semantic::Negotiation::Binding::Status::Pending) {
-      status = Ttx::Data::Status::Busy;
-    } else if (
-        answer == Ttx::Semantic::Negotiation::Binding::Status::Rejected) {
-      status = Ttx::Data::Status::Denied;
-    }
     if (found) {
       // The lab scalar role supplies a parameter label through get_data. Only
       // that admitted role gives these bytes a name interpretation. Generic
@@ -55,10 +51,6 @@ auto Godot::Extension::Values::Field::compile(
           subject.get_data(), offset,
           ::Godot::Extension::Contracts::Scalar::get_representation(kinds[i]),
           types[i]);
-    }
-
-    if (status != Ttx::Data::Status::Unsupported) {
-      return status;
     }
   }
 

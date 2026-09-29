@@ -72,7 +72,7 @@ auto Imaging::Cpu::Image::supports(System::Uuid contract) const
                  contract == Imaging::Contracts::Convolve::contract_id ||
                  contract == Imaging::Contracts::Composite::contract_id
              ? Status::Satisfied
-             : Status::Unsupported;
+             : Status::Unknown;
 }
 
 auto Imaging::Cpu::Image::fulfill(
@@ -141,5 +141,5 @@ auto Imaging::Cpu::Image::fulfill(
         Imaging::Contracts::Composite::Api(this, &table), requested);
   }
 
-  return Ttx::Semantic::Negotiation::Binding::Status::Unsupported;
+  return Ttx::Semantic::Negotiation::Binding::Status::Unknown;
 }

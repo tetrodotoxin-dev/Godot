@@ -4,14 +4,15 @@
 #pragma once
 
 #include "demo/sampling/contracts/samples.hpp"
-#include "ttx/concept/modules/module.hpp"
+#include "ttx/concept/policies/borrowed.hpp"
+#include "ttx/semantic/negotiation/library.hpp"
 
 namespace Godot::Demo::Sampling {
 
-// Function retains one module and runtime publication beside its fulfilled
-// Samples binding. An injected importer can supply the module, while a native
-// command line owner can load a path directly. Neither choice enters the hot
-// count operation, and publication release always precedes code release.
+// Function acquires the computation through Borrow and keeps its Samples API
+// for repeated calls. A configured import service supplies the code lifetime.
+// Direct native loading keeps a Library here and releases the computation
+// before closing it.
 class Function {
  public:
   static auto open(
@@ -19,23 +20,25 @@ class Function {
       Perimortem::Memory::Allocator::Arena& errors)
       -> Perimortem::Utility::Result<Function, Perimortem::Core::View::Bytes>;
   static auto open(
-      Ttx::Concept::Modules::Module module,
+      Ttx::Semantic::Negotiation::Library module,
       Ttx::Semantic::Negotiation::Query host =
           Ttx::Semantic::Negotiation::Query())
+      -> Perimortem::Utility::Result<Function, Perimortem::Core::View::Bytes>;
+  static auto open(Ttx::Semantic::Negotiation::Query subject)
       -> Perimortem::Utility::Result<Function, Perimortem::Core::View::Bytes>;
   Function(Function&& other);
   Function(const Function&) = delete;
   auto operator=(const Function&) -> Function& = delete;
-  ~Function() = default;
+  ~Function();
   auto get_handle() const -> Sampling::Contracts::Samples { return handle; }
 
  private:
   Function(
-      Ttx::Concept::Modules::Module module,
-      Ttx::Concept::Modules::Module::Acquisition publication,
+      Perimortem::Core::Option<Ttx::Semantic::Negotiation::Library> module,
+      Ttx::Concept::Policies::Borrowed publication,
       Sampling::Contracts::Samples handle);
-  Ttx::Concept::Modules::Module module;
-  Ttx::Concept::Modules::Module::Acquisition publication;
+  Perimortem::Core::Option<Ttx::Semantic::Negotiation::Library> module;
+  Perimortem::Core::Option<Ttx::Concept::Policies::Borrowed> publication;
   Sampling::Contracts::Samples handle;
 };
 

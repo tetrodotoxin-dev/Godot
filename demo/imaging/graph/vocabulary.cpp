@@ -3,6 +3,8 @@
 
 #include "demo/imaging/graph/vocabulary.hpp"
 
+#include "ttx/concept/policies/none.h"
+
 using namespace Godot::Demo;
 using namespace Perimortem;
 

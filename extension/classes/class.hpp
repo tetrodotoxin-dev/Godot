@@ -4,28 +4,28 @@
 #pragma once
 
 #include "extension/classes/method.hpp"
-#include "extension/contracts/class.hpp"
-#include "ttx/concept/modules/module.hpp"
-#include "ttx/semantic/ownership/factory.hpp"
-#include "ttx/semantic/ownership/publication.hpp"
+#include "ttx/concept/abstract.hpp"
+#include "ttx/concept/capabilities/create.hpp"
+#include "ttx/concept/policies/borrowed.hpp"
 
 namespace Godot::Extension::Classes {
 
-// Class is the emitted terminal. Its metadata and factory have independent
-// lifetimes from the source graph. The module is declared first so its code is
-// released after the factory finalizer and every other owned runtime resource.
-// Godot retains this owner's address while its registration exists.
+// Class owns a Godot registration, its copied method descriptions and the
+// retained construction capability. These are the inputs used to construct
+// instances after discovery ends. Destruction removes the registration and
+// returns the provider state while its code remains loaded.
 class Class {
  public:
+  Class(const Class&) = delete;
+  auto operator=(const Class&) -> Class& = delete;
   Class(
-      Ttx::Concept::Modules::Module module,
-      Ttx::Semantic::Ownership::Publication factory,
-      Ttx::Semantic::Ownership::Factory constructor,
+      Ttx::Concept::Policies::Borrowed factory,
+      Ttx::Concept::Capabilities::Create constructor,
       godot::String name,
       godot::String base,
       Perimortem::Memory::Dynamic::Vector<Method> methods);
   ~Class();
-  auto get_query() const -> ttx_semantic_query;
+  auto publish() -> Ttx::Data::Status;
   auto get_methods() const -> Perimortem::Core::View::Vector<Method> {
     return methods.get_view();
   }
@@ -34,17 +34,15 @@ class Class {
   auto is_node() const -> bool { return node; }
 
  private:
-  // Godot keeps this owner's userdata. These callbacks create and destroy the
-  // private instance relationship, so keeping them on the owner makes their
-  // lifetime accounting visible without exposing transaction state.
+  // Godot calls these through the registration's userdata. They pair native
+  // object creation with the provider instance and update the class's live
+  // instance count as that relationship begins and ends.
   static auto create(void* source, GDExtensionBool notify)
       -> GDExtensionObjectPtr;
   static auto destroy(void* source, GDExtensionClassInstancePtr instance)
       -> void;
-  auto publish() -> Ttx::Data::Status;
-  Ttx::Concept::Modules::Module module;
-  Ttx::Semantic::Ownership::Publication factory;
-  Ttx::Semantic::Ownership::Factory constructor;
+  Ttx::Concept::Policies::Borrowed factory;
+  Ttx::Concept::Capabilities::Create constructor;
   godot::StringName name;
   godot::StringName base;
   Perimortem::Memory::Dynamic::Vector<Method> methods;

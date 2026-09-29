@@ -8,9 +8,9 @@
 
 namespace Godot::Demo::Sampling::Class {
 
-// Exports owns the declaration graph only. Its lifetime can end as soon as
-// a terminal has prepared the class, while emitted Runtime owners keep the
-// injected services required by future sampling instances.
+// Exports lends the sampler declaration during module discovery. A terminal
+// copies the method descriptions it consumes and borrows the declaration's
+// construction capability for later instances.
 class Exports {
  public:
   explicit Exports(Ttx::Semantic::Negotiation::Query host)

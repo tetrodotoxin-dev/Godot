@@ -20,6 +20,7 @@ namespace Godot::Demo::Adapters::Cuda {
 class TtxCudaProgram : public godot::Resource {
   GDCLASS(TtxCudaProgram, godot::Resource)
  public:
+  ~TtxCudaProgram() override;
   auto compile(
       const godot::String& source,
       const godot::Dictionary& headers = {},
@@ -37,8 +38,7 @@ class TtxCudaProgram : public godot::Resource {
   static auto _bind_methods() -> void;
 
  private:
-  Perimortem::Core::Option<Ttx::Concept::Modules::Module> module;
-  Perimortem::Core::Option<Ttx::Semantic::Ownership::Publication> publication;
+  Perimortem::Core::Option<Ttx::Concept::Policies::Borrowed> publication;
   Perimortem::Core::Option<::Cuda::Contracts::Program> program;
   godot::String error;
 };
