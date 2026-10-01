@@ -4,7 +4,8 @@
 *.gd.uid
 MODULE.bazel.lock
 
-/demo/.godot/
-/demo/addons/godot_ttx/
+/source/demo/.godot/
+/source/demo/addons/godot_ttx/
 
 __pycache__/
+/.vscode/c_cpp_properties.json

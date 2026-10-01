@@ -1,0 +1,4 @@
+EXPORTS
+  godot_scalar_abstract
+  godot_scalar_representation
+  godot_lifecycle_representation

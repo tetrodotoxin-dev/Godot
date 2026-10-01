@@ -1,0 +1,182 @@
+// # Tetrodotoxin
+// Copyright (c) 2023-present Matt Kaes and contributors
+
+#include "godot_ttx/values/field.hpp"
+
+#include <godot_cpp/godot.hpp>
+
+#include "perimortem/core/data.hpp"
+
+using namespace Perimortem;
+using namespace Godot::Extension;
+
+Godot::Extension::Values::Field::Field(
+    Core::View::Bytes name,
+    Count offset,
+    const Ttx::Data::Form::Representation& representation,
+    godot::Variant::Type type)
+    : offset(offset),
+      representation(&representation),
+      info(
+          type,
+          godot::String::utf8(
+              reinterpret_cast<const char*>(name.get_data()),
+              name.get_size())) {}
+
+auto Godot::Extension::Values::Field::compile(
+    Ttx::Concept::Abstract subject,
+    Count offset) -> Utility::Result<Field, Ttx::Data::Status> {
+  using Kind = ::Godot::Extension::Contracts::Scalar::Kind;
+  const U64 roles[] = {
+    GODOT_BOOLEAN_ID_LOW, GODOT_INTEGER_ID_LOW, GODOT_REAL_ID_LOW,
+    GODOT_TEXT_ID_LOW, GODOT_BUFFER_ID_LOW};
+  const Kind kinds[] = {
+    Kind::Boolean, Kind::Integer, Kind::Real, Kind::Text, Kind::Buffer};
+  const godot::Variant::Type types[] = {
+    godot::Variant::BOOL, godot::Variant::INT, godot::Variant::FLOAT,
+    godot::Variant::STRING, godot::Variant::PACKED_BYTE_ARRAY};
+  // These are independent semantic questions. An unknown or refused Boolean
+  // question says nothing about whether this subject supplies Integer or Text.
+  // The first accepted role selects this exporter's conversion policy.
+  for (Count i = 0; i != 5; ++i) {
+    const auto answer = subject.get_query().supports(
+        System::Uuid(GODOT_SCALAR_ID_HIGH, roles[i]));
+    const bool found =
+        answer == Ttx::Semantic::Negotiation::Binding::Status::Satisfied;
+    if (found) {
+      // The Godot field role supplies a parameter label through get_data. Only
+      // that admitted role gives these bytes a name interpretation. Generic
+      // Abstract data has no such text or naming promise.
+      return Field(
+          subject.get_data(), offset,
+          ::Godot::Extension::Contracts::Scalar::get_representation(kinds[i]),
+          types[i]);
+    }
+  }
+
+  return Ttx::Data::Status::Unsupported;
+}
+
+auto Godot::Extension::Values::Field::read(
+    const void* source,
+    bool variant,
+    U8* frame,
+    Borrow& borrow) const -> void {
+  auto* target = frame + offset;
+  switch (info.type) {
+  case godot::Variant::BOOL: {
+    const U8 value = variant ? bool(*static_cast<const godot::Variant*>(source))
+                             : *static_cast<const bool*>(source);
+    Core::Data::copy(target, &value);
+    break;
+  }
+  case godot::Variant::INT: {
+    const S64 value = variant
+                          ? int64_t(*static_cast<const godot::Variant*>(source))
+                          : *static_cast<const int64_t*>(source);
+    Core::Data::copy(target, &value);
+    break;
+  }
+  case godot::Variant::FLOAT: {
+    const R64 value = variant
+                          ? double(*static_cast<const godot::Variant*>(source))
+                          : *static_cast<const double*>(source);
+    Core::Data::copy(target, &value);
+    break;
+  }
+  case godot::Variant::STRING: {
+    borrow.text =
+        (variant ? godot::String(*static_cast<const godot::Variant*>(source))
+                 : *static_cast<const godot::String*>(source))
+            .utf8();
+    const perimortem_view_bytes value{
+      reinterpret_cast<const U8*>(borrow.text.get_data()),
+      Count(borrow.text.length())};
+    Core::Data::copy(target, &value);
+    break;
+  }
+  case godot::Variant::PACKED_BYTE_ARRAY: {
+    borrow.bytes = variant
+                       ? godot::PackedByteArray(
+                             *static_cast<const godot::Variant*>(source))
+                       : *static_cast<const godot::PackedByteArray*>(source);
+    const perimortem_view_bytes value{
+      borrow.bytes.ptr(), Count(borrow.bytes.size())};
+    Core::Data::copy(target, &value);
+    break;
+  }
+  default:
+    break;
+  }
+}
+
+auto Godot::Extension::Values::Field::value(const U8* frame) const
+    -> godot::Variant {
+  const auto* source = frame + offset;
+  switch (info.type) {
+  case godot::Variant::BOOL:
+    return godot::Variant(bool(*source));
+  case godot::Variant::INT: {
+    S64 value;
+    Core::Data::copy(reinterpret_cast<U8*>(&value), source, sizeof(value));
+    return godot::Variant(int64_t(value));
+  }
+  case godot::Variant::FLOAT: {
+    R64 value;
+    Core::Data::copy(reinterpret_cast<U8*>(&value), source, sizeof(value));
+    return godot::Variant(double(value));
+  }
+  case godot::Variant::STRING: {
+    perimortem_view_bytes value;
+    Core::Data::copy(reinterpret_cast<U8*>(&value), source, sizeof(value));
+    return godot::Variant(
+        godot::String::utf8(
+            reinterpret_cast<const char*>(value.data), value.size));
+  }
+  case godot::Variant::PACKED_BYTE_ARRAY: {
+    perimortem_view_bytes value;
+    Core::Data::copy(reinterpret_cast<U8*>(&value), source, sizeof(value));
+    godot::PackedByteArray bytes;
+    bytes.resize(value.size);
+    Core::Data::copy(bytes.ptrw(), value.data, value.size);
+    return godot::Variant(bytes);
+  }
+  default:
+    break;
+  }
+
+  return godot::Variant();
+}
+
+auto Godot::Extension::Values::Field::put(
+    const U8* frame,
+    void* destination,
+    bool variant) const -> void {
+  const auto result = value(frame);
+  if (variant) {
+    godot::gdextension_interface::variant_new_copy(
+        destination, result._native_ptr());
+    return;
+  }
+
+  switch (info.type) {
+  case godot::Variant::BOOL:
+    *static_cast<bool*>(destination) = bool(result);
+    break;
+  case godot::Variant::INT:
+    *static_cast<int64_t*>(destination) = int64_t(result);
+    break;
+  case godot::Variant::FLOAT:
+    *static_cast<double*>(destination) = double(result);
+    break;
+  case godot::Variant::STRING:
+    *static_cast<godot::String*>(destination) = godot::String(result);
+    break;
+  case godot::Variant::PACKED_BYTE_ARRAY:
+    *static_cast<godot::PackedByteArray*>(destination) =
+        godot::PackedByteArray(result);
+    break;
+  default:
+    break;
+  }
+}

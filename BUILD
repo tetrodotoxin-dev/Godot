@@ -12,3 +12,10 @@ config_setting(
     name = "web",
     constraint_values = ["@platforms//cpu:wasm32"],
 )
+
+exports_files(["LICENSE"])
+
+config_setting(
+    name = "windows",
+    constraint_values = ["@platforms//os:windows"],
+)

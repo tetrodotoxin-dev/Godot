@@ -1,0 +1,19 @@
+[configuration]
+entry_symbol = "godot_ttx_init"
+compatibility_minimum = "4.7"
+reloadable = false
+
+[libraries]
+windows.debug.x86_64 = "./ttx_bridge.dll"
+windows.release.x86_64 = "./ttx_bridge.dll"
+linux.debug.x86_64 = "./libttx_bridge.so"
+linux.release.x86_64 = "./libttx_bridge.so"
+web.debug.wasm32 = "./web/libttx_bridge.so"
+web.release.wasm32 = "./web/libttx_bridge.so"
+
+[dependencies]
+windows.x86_64 = {"./godot_ttx.dll": "", "./perimortem.dll": "", "./ttx.dll": ""}
+linux.x86_64 = {"./libgodot_ttx.so": "", "./libperimortem.so": "", "./libttx.so": ""}
+web.wasm32 = {"./web/libgodot_ttx.so": "",
+"./web/libperimortem.so": "",
+"./web/libttx.so": ""}
