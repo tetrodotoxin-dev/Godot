@@ -9,3 +9,6 @@ MODULE.bazel.lock
 
 __pycache__/
 /.vscode/c_cpp_properties.json
+
+/example/.godot/
+/example/addons/godot_ttx/

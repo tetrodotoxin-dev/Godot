@@ -3,15 +3,23 @@
 
 #pragma once
 
-#include <godot_cpp/classes/ref.hpp>
-#include <godot_cpp/classes/ref_counted.hpp>
-#include <godot_cpp/variant/array.hpp>
-#include <godot_cpp/variant/vector3i.hpp>
+#define TOOLCHAIN_PRIVATE_HEADER 1
 
-#include "perimortem/memory/dynamic/bytes.hpp"
-#include "perimortem/memory/dynamic/vector.hpp"
+#include "toolchain/toolchain.h"
 
-#include "cuda/contracts/kernel.hpp"
+#include "perimortem/memory/global/bytes.hpp"
+#include "perimortem/memory/global/vector.hpp"
+
+#include "godot_cpp/classes/ref.hpp"
+#include "godot_cpp/classes/ref_counted.hpp"
+#include "godot_cpp/variant/array.hpp"
+#include "godot_cpp/variant/vector3i.hpp"
+
+#ifndef TOOLCHAIN_WASM
+#include "cuda/contracts/kernel.h"
+#endif
+#include "ttx/data/form/representation.hpp"
+
 #include "demo/adapters/cuda/ttx_cuda_buffer.hpp"
 
 namespace Godot::Demo::Adapters::Cuda {
@@ -32,26 +40,39 @@ class TtxCudaKernel : public godot::RefCounted {
     bool bytes;
   };
 
+#ifndef TOOLCHAIN_WASM
+
   static auto adopt(
-      Ttx::Concept::Policies::Borrowed subject,
+      ttx_retained result,
+      Library& library,
       const Ttx::Data::Form::Representation& form,
-      Perimortem::Memory::Dynamic::Vector<Argument> arguments)
+      Perimortem::Memory::Global::Vector<Argument> arguments)
       -> godot::Ref<TtxCudaKernel>;
+
+#endif
+
   auto launch(
       const godot::Array& values,
       godot::Vector3i grid,
       godot::Vector3i block,
-      int64_t shared_bytes = 0) -> bool;
+      GDExtensionInt shared_bytes = 0) -> bool;
   auto get_error() const -> godot::String { return error; }
 
  protected:
   static auto _bind_methods() -> void;
 
  private:
-  Perimortem::Core::Option<Ttx::Concept::Policies::Borrowed> owner;
-  Perimortem::Core::Option<::Cuda::Contracts::Kernel> kernel;
-  Perimortem::Memory::Dynamic::Bytes form;
-  Perimortem::Memory::Dynamic::Vector<Argument> arguments;
+
+#ifndef TOOLCHAIN_WASM
+
+  ttx_retained retained{};
+  cuda_kernel kernel{};
+  Library* library = nullptr;
+  Ttx::Data::Form::Representation form;
+  Perimortem::Memory::Global::Vector<Argument> arguments;
+
+#endif
+
   godot::String error;
 };
 

@@ -4,57 +4,29 @@
 #ifndef GODOT_CONTRACTS_IMAGE_H
 #define GODOT_CONTRACTS_IMAGE_H
 
-#include "ttx/data/form/representation.h"
-#include "ttx/semantic/negotiation/query.h"
+#include "ttx/graph/policies/retained.h"
 
-// An image can keep its pixels in CPU memory, on a device, or behind another
-// implementation entirely. These records describe what crosses the module
-// boundary so the host never needs the provider's native object layout.
-// The module entry or host admission establishes the System V AMD64 calling
-// agreement.
+#include "compute/image/pixels.h"
+
+// Lab image operations preserve the source snapshot and publish an independent
+// result through Retained. The result supplies Compute Pixels and may offer
+// further image operations. The consumer releases each successful result once
+// and keeps its supplying module loaded through that release.
 //
-// A successful creation or operation writes one owned image reference. Failure
-// leaves that output unused and lends diagnostic bytes until the next provider
-// call. The caller copies a diagnostic before releasing its supplying module.
+// Empty diagnostic bytes mean success. Failure transfers no acquisition and
+// leaves the output record unusable. Diagnostic bytes remain readable until
+// the next call through the supplying API. The consumer copies them before
+// another call or the end of that API's access duration.
 typedef struct image_error {
   const U8* data;
   Count size;
 } image_error;
 
-typedef struct image_dimensions {
-  U32 width;
-  U32 height;
-} image_dimensions;
-
-// Creation supplies this bootstrap table so the caller can manage lifetime
-// before requesting optional image operations. Query acquires those callables.
-// Pixels independently publishes a Data transport for the RGBA8 observation.
-// Representation describes that public pixel surface, not the private payload.
-// Binding an operation therefore need not download a device image.
-typedef struct image_operations {
-  void (*retain)(const void*);
-  void (*release)(const void*);
-  image_dimensions (*dimensions)(const void*);
-  ttx_semantic_query (*query)(const void*);
-  ttx_semantic_query (*pixels)(const void*);
-  const ttx_representation* (*representation)(const void*);
-} image_operations;
-
-// The receiver belongs to the provider and is interpreted only by its thunks.
-// Copying these fields does not retain the image or the executable code. The
-// host pairs an owned image reference with the module lifetime and invokes
-// release before that module can unload. Stateless operations may use null
-// source. A usable operation table is always present.
-typedef struct image_object {
-  const void* source;
-  const image_operations* operations;
-} image_object;
-
-// A convolution borrows float32 coefficients in row order for one synchronous
-// call. The caller may keep them in an authored graph node or a temporary
-// vector. Neither representation becomes part of the provider's object model.
-// The odd dimensions select the exact center used by convolution with zero
-// padding.
+// Coefficients describe centered linear convolution with zero padding. Width
+// and height are odd, between one and 1023, and count equals their product.
+// Values are finite with magnitude at most one million. Providers may refuse
+// work beyond an advertised execution budget. The coefficient array remains
+// readable until the synchronous call returns.
 typedef struct image_kernel {
   U32 width;
   U32 height;
@@ -62,43 +34,51 @@ typedef struct image_kernel {
   Count count;
 } image_kernel;
 
-#define GODOT_IMAGE_INVERT_ID_HIGH ((U64)0xaa57de9dd2694e29ULL)
-#define GODOT_IMAGE_INVERT_ID_LOW ((U64)0x88925a047fbf0601ULL)
-#define GODOT_IMAGE_CONVOLVE_ID_HIGH ((U64)0xaa57de9dd2694e29ULL)
-#define GODOT_IMAGE_CONVOLVE_ID_LOW ((U64)0x88925a047fbf0602ULL)
-#define GODOT_IMAGE_COMPOSITE_ID_HIGH ((U64)0xaa57de9dd2694e29ULL)
-#define GODOT_IMAGE_COMPOSITE_ID_LOW ((U64)0x88925a047fbf0603ULL)
+#define GODOT_IMAGE_INVERT_ID_HIGH 0xc5f32a681edf425eULL
+#define GODOT_IMAGE_INVERT_ID_LOW 0xb81759d7620fa301ULL
+#define GODOT_IMAGE_CONVOLVE_ID_HIGH 0xc5f32a681edf425eULL
+#define GODOT_IMAGE_CONVOLVE_ID_LOW 0xb81759d7620fa302ULL
+#define GODOT_IMAGE_COMPOSITE_ID_HIGH 0xc5f32a681edf425eULL
+#define GODOT_IMAGE_COMPOSITE_ID_LOW 0xb81759d7620fa303ULL
 
-// Each UUID fixes its complete signature and behavior. These tables happen to
-// have the same storage shape, but their functions cannot be interchanged on
-// that evidence. Fulfillment supplies the table for the requested contract.
-// All operations preserve the source and return an independently retained
-// result. Convolution and composition can fail without certifying an image.
-typedef struct image_invert_operations {
-  image_error (*apply)(const void*, image_object*);
-} image_invert_operations;
-
-typedef struct image_convolve_operations {
-  image_error (*apply)(const void*, image_kernel, image_object*);
-} image_convolve_operations;
-
-typedef struct image_composite_operations {
-  image_error (*apply)(const void*, image_object, image_object*);
-} image_composite_operations;
+// Invert complements RGB bytes and preserves alpha and dimensions.
+typedef struct image_invert_ops {
+  ttx_abstract (*get_abstract)(void* context);
+  image_error (*apply)(void* context, ttx_retained* output);
+} image_invert_ops;
 
 typedef struct image_invert {
-  const void* source;
-  const image_invert_operations* operations;
+  void* context;
+  const image_invert_ops* operations;
 } image_invert;
 
+// Convolve rounds clamped RGB results to the nearest byte and preserves source
+// alpha. An implementation may differ by one byte through floating point
+// rounding. A failed operation leaves the source snapshot unchanged.
+typedef struct image_convolve_ops {
+  ttx_abstract (*get_abstract)(void* context);
+  image_error (
+      *apply)(void* context, image_kernel kernel, ttx_retained* output);
+} image_convolve_ops;
+
 typedef struct image_convolve {
-  const void* source;
-  const image_convolve_operations* operations;
+  void* context;
+  const image_convolve_ops* operations;
 } image_convolve;
 
+// Composite places the overlay over the source using straight alpha. Both
+// images must supply Pixels with equal dimensions. The provider interprets the
+// overlay solely through its published operations and keeps no access to that
+// Abstract after apply returns. RGB and alpha use nearest integer rounding.
+typedef struct image_composite_ops {
+  ttx_abstract (*get_abstract)(void* context);
+  image_error (
+      *apply)(void* context, ttx_abstract overlay, ttx_retained* output);
+} image_composite_ops;
+
 typedef struct image_composite {
-  const void* source;
-  const image_composite_operations* operations;
+  void* context;
+  const image_composite_ops* operations;
 } image_composite;
 
 #endif

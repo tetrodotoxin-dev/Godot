@@ -1,29 +1,16 @@
-# # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_shared_library.bzl", "cc_shared_library")
+load("@tetro_toolchain//:defs.bzl", "library", "WINDOWS", "WEB")
 
-cc_library(
-    name = "implementation",
-    includes = ["../.."],
-    srcs = ["counter.cpp"],
-    copts = ["-fvisibility=hidden"],
-    deps = [
-        "//source/godot_ttx:godot_ttx",
-    ],
-)
-
-cc_shared_library(
+library(
     name = "counter_extension",
-    shared_lib_name = "libcounter_extension.so",
-    user_link_flags = select({
-        "//:web": [],
-        "//conditions:default": [
-            "-Wl,-z,defs",
-            "-Wl,-rpath,$ORIGIN",
-        ],
-    }),
+    module = "counter",
+    linkage = "shared",
+    srcs = ["counter.cpp", "module.c"],
+    linkopts = select({WEB: ["-Wl,--export=__wasm_call_ctors"], "//conditions:default": []}),
+    shared_lib_name = select({WINDOWS: "counter_extension.dll", "//conditions:default": "libcounter_extension.so"}),
+    implementation_deps = ["@ttx//:graph"],
     visibility = ["//visibility:public"],
-    deps = [":implementation"],
 )
+
+filegroup(name = "runtime", srcs = [":counter_extension_shared"], visibility = ["//visibility:public"])

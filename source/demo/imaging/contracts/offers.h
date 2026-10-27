@@ -4,11 +4,12 @@
 #ifndef GODOT_CONTRACTS_OFFERS_H
 #define GODOT_CONTRACTS_OFFERS_H
 
-#include "demo/imaging/contracts/image.h"
 #include "perimortem/core/view/bytes.h"
 
-#define GODOT_IMAGE_OFFERS_ID_HIGH ((U64)0x6d5e8d6eaa594a73ULL)
-#define GODOT_IMAGE_OFFERS_ID_LOW ((U64)0xb36937022a931734ULL)
+#include "demo/imaging/contracts/image.h"
+
+#define GODOT_IMAGE_OFFERS_ID_HIGH ((U64)0x0d49e5ea975747f1ULL)
+#define GODOT_IMAGE_OFFERS_ID_LOW ((U64)0x86e8aac5dde60552ULL)
 
 #define IMAGE_INPUT_NONE ((U8)0)
 #define IMAGE_INPUT_KERNEL ((U8)1)
@@ -22,10 +23,10 @@
 // A kernel offer describes square choices from minimum through maximum with
 // the given step. Admission also accepts rectangular requests and remains the
 // authority for an exact request. Providers enforce that same policy inside
-// execution, so a client that never enumerates offers receives the same refusal.
-// Visits borrow each label until the callback returns. Admission diagnostics
-// survive until the next observation on this image. Neither observation runs
-// the image operation or produces an output image.
+// execution, so a client that never enumerates offers receives the same
+// refusal. Visits keep each label readable until the callback returns.
+// Admission diagnostics survive until the next observation on this image.
+// Neither observation runs the image operation or produces an output image.
 typedef struct image_offer {
   perimortem_uuid contract;
   perimortem_view_bytes name;
@@ -36,19 +37,25 @@ typedef struct image_offer {
 } image_offer;
 
 typedef struct image_offer_visitor {
-  void* source;
-  void (*visit)(void* source, image_offer offer);
+  void* callback_context;
+  void (*callback)(void* callback_context, image_offer offer);
 } image_offer_visitor;
 
 typedef struct image_admission {
-  ttx_binding_status status;
+  ttx_negotiation_status status;
   perimortem_view_bytes reason;
 } image_admission;
 
+typedef struct image_offers_ops {
+  ttx_abstract (*get_abstract)(void* context);
+  void (*visit)(void* context, image_offer_visitor visitor);
+  image_admission (
+      *admit)(void* context, perimortem_uuid contract, U32 width, U32 height);
+} image_offers_ops;
+
 typedef struct image_offers {
-  const void* source;
-  void (*visit)(const void* source, image_offer_visitor visitor);
-  image_admission (*admit)(const void* source, perimortem_uuid contract, U32 width, U32 height);
+  void* context;
+  const image_offers_ops* operations;
 } image_offers;
 
 #endif

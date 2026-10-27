@@ -3,12 +3,18 @@
 
 #pragma once
 
-#include <godot_cpp/classes/ref.hpp>
-#include <godot_cpp/classes/resource.hpp>
-#include <godot_cpp/variant/dictionary.hpp>
-#include <godot_cpp/variant/packed_string_array.hpp>
+#define TOOLCHAIN_PRIVATE_HEADER 1
 
-#include "cuda/contracts/program.hpp"
+#include "toolchain/toolchain.h"
+
+#include "godot_cpp/classes/ref.hpp"
+#include "godot_cpp/classes/resource.hpp"
+#include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/variant/packed_string_array.hpp"
+
+#ifndef TOOLCHAIN_WASM
+#include "cuda/contracts/program.h"
+#endif
 #include "demo/adapters/cuda/ttx_cuda_kernel.hpp"
 
 namespace Godot::Demo::Adapters::Cuda {
@@ -29,7 +35,7 @@ class TtxCudaProgram : public godot::Resource {
       const godot::String& path,
       const godot::Dictionary& headers = {},
       const godot::PackedStringArray& options = {}) -> bool;
-  auto allocate(int64_t size) -> godot::Ref<TtxCudaBuffer>;
+  auto allocate(GDExtensionInt size) -> godot::Ref<TtxCudaBuffer>;
   auto prepare(const godot::String& entry, const godot::Array& arguments)
       -> godot::Ref<TtxCudaKernel>;
   auto get_error() const -> godot::String { return error; }
@@ -38,8 +44,15 @@ class TtxCudaProgram : public godot::Resource {
   static auto _bind_methods() -> void;
 
  private:
-  Perimortem::Core::Option<Ttx::Concept::Policies::Borrowed> publication;
-  Perimortem::Core::Option<::Cuda::Contracts::Program> program;
+
+#ifndef TOOLCHAIN_WASM
+
+  ttx_retained retained{};
+  cuda_program program{};
+  Library* library = nullptr;
+
+#endif
+
   godot::String error;
 };
 

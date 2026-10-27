@@ -15,5 +15,5 @@ func create_source() -> TtxImage:
 	return source
 
 func get_configuration_warnings() -> PackedStringArray:
-	var imports: Dictionary = ProjectSettings.get_setting_with_override("ttx/imports")
-	return [] if imports.has(module) else ["Choose a module configured in ttx/imports."]
+	var imports: Dictionary = ProjectSettings.get_setting_with_override("ttx/image_modules")
+	return [] if imports.has(module) else ["Choose a module configured in ttx/image_modules."]

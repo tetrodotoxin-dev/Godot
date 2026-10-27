@@ -3,86 +3,63 @@
 
 #pragma once
 
-#include <godot_cpp/classes/ref.hpp>
-#include <godot_cpp/classes/resource.hpp>
-#include <godot_cpp/variant/dictionary.hpp>
-#include <godot_cpp/variant/packed_byte_array.hpp>
+#define TOOLCHAIN_PRIVATE_HEADER 1
 
-#include "demo/imaging/graph/call.hpp"
-#include "demo/imaging/graph/source.hpp"
+#include "godot_cpp/classes/ref.hpp"
+#include "godot_cpp/classes/resource.hpp"
+#include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/variant/packed_byte_array.hpp"
+#include "godot_cpp/variant/packed_float32_array.hpp"
 
 namespace Godot::Demo::Adapters::Imaging {
 
-// The Resource exposed to Godot owns a dependency node, allowing existing game
-// code to keep a result while its inputs change. Its provider choice applies
-// when source pixels are published. Derived operations follow the receiver's
-// provider through the native graph. GDScript therefore uses the same methods
-// for native and script providers without acquiring their object
-// representation.
+class ImageNode;
+
+// TtxImage keeps the lab's live dependency expression. Derived resources follow
+// source revisions, while snapshot keeps the current retained image. Provider
+// choice belongs to source publication; operations use contracts supplied by
+// the encountered image, including images implemented in GDScript.
 //
-// This class owns Godot conversion and error presentation. Image owns native
-// values and module lifetime, while Source and Call own publication and cache
-// validity. Keeping those responsibilities separate lets the same graph run in
-// the native acceptance executable without linking the engine.
+// Godot owns these Resources. Each expression independently keeps its inputs,
+// retained result and loaded provider code available through its final use.
+// Calls run on Godot's scene thread. Source publication requires evaluation
+// to have finished, including callbacks made by script providers.
 class TtxImage : public godot::Resource {
   GDCLASS(TtxImage, godot::Resource)
  public:
   ~TtxImage() override;
-  void set_provider(const godot::String&);
+  void set_provider(const godot::String& value);
   auto get_provider() const -> godot::String;
-  // An existing factory is source configuration just like a module path.
-  // Derivation and snapshots preserve that choice for later publications.
-  // Provider changes are rejected while an observation borrows current state.
   void set_provider_object(const godot::Ref<godot::RefCounted>& object);
   auto get_provider_object() const -> godot::Ref<godot::RefCounted>;
-  auto set_rgba8(int64_t width, int64_t height, const godot::PackedByteArray&)
+  auto set_rgba8(GDExtensionInt width, GDExtensionInt height, const godot::PackedByteArray& pixels)
       -> bool;
   auto snapshot() -> godot::Ref<TtxImage>;
   auto read_pixels() -> godot::PackedByteArray;
-  auto get_width() -> int64_t;
-  auto get_height() -> int64_t;
-  auto get_error() const -> godot::String;
-  // Diagnostic observations belong to the lab, separately from image identity.
-  // They let script tests observe real device transfers and resource reuse.
+  auto get_width() -> GDExtensionInt;
+  auto get_height() -> GDExtensionInt;
+  auto get_error() const -> godot::String { return error; }
   auto get_provider_statistics() -> godot::Dictionary;
   auto get_offers() -> godot::Array;
-  auto admit(
-      const godot::String& operation,
-      int64_t width = 0,
-      int64_t height = 0) -> godot::Dictionary;
+  auto admit(const godot::String& operation, GDExtensionInt width = 0, GDExtensionInt height = 0)
+      -> godot::Dictionary;
   auto invoke(
       const godot::String& operation,
       const godot::Array& arguments = {}) -> godot::Ref<TtxImage>;
+  auto invert() -> godot::Ref<TtxImage>;
+  auto convolve(const godot::PackedFloat32Array& weights, GDExtensionInt width, GDExtensionInt height)
+      -> godot::Ref<TtxImage>;
+  auto composite(const godot::Ref<TtxImage>& overlay) -> godot::Ref<TtxImage>;
 
  protected:
   static void _bind_methods();
 
  private:
-  // Godot lends this exact registered Resource to its method callback. These
-  // helpers keep its error, source and expression updates together. Exposing
-  // those mutable fields would make the host lifetime harder to audit.
-  static void call_operation(
-      void*,
-      GDExtensionClassInstancePtr,
-      const GDExtensionConstVariantPtr*,
-      GDExtensionInt,
-      GDExtensionVariantPtr,
-      GDExtensionCallError*);
-  auto apply(
-      const Godot::Demo::Imaging::Graph::Operation&,
-      const GDExtensionConstVariantPtr*,
-      GDExtensionInt,
-      Perimortem::Core::Option<Perimortem::Memory::Allocator::Arena> constants =
-          {}) -> godot::Ref<TtxImage>;
-  auto evaluate(Perimortem::Memory::Allocator::Arena&)
-      -> const Godot::Demo::Imaging::Graph::Image*;
-  auto open_provider(Perimortem::Memory::Allocator::Arena&) -> bool;
-  godot::Ref<godot::RefCounted> provider_object;
+  auto evaluate() -> bool;
+  ImageNode* node = nullptr;
   godot::String provider;
+  godot::Ref<godot::RefCounted> provider_object;
   godot::String error;
-  Godot::Demo::Imaging::Graph::Expression* expression = nullptr;
-  Godot::Demo::Imaging::Graph::Source* source = nullptr;
-  Godot::Demo::Imaging::Graph::Provider* supply = nullptr;
 };
 
 }  // namespace Godot::Demo::Adapters::Imaging

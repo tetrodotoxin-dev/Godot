@@ -11,11 +11,7 @@ web.release.wasm32 = "./web/libgodot_demo.so"
 
 [dependencies]
 web.wasm32 = {
-"./web/libgodot_ttx.so": "",
 "./web/libperimortem.so": "",
 "./web/libttx.so": "",
-"./web/liblab_support.so": "",
-"./web/libcounter_extension.so": "",
-"./web/libsampler_extension.so": "",
-"./web/libcpu_provider.so": ""
+"./web/libcompute.so": ""
 }

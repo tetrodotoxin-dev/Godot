@@ -3,21 +3,23 @@
 
 #include "demo/adapters/cuda/ttx_cuda_program.hpp"
 
-#include <godot_cpp/classes/file_access.hpp>
-#include <godot_cpp/classes/project_settings.hpp>
-#include <godot_cpp/core/class_db.hpp>
+#include "godot_cpp/classes/file_access.hpp"
+#include "godot_cpp/classes/project_settings.hpp"
+#include "godot_cpp/core/class_db.hpp"
+#include "godot_cpp/variant/utility_functions.hpp"
+#ifndef TOOLCHAIN_WASM
+#include "cuda/contracts/compiler.h"
+#endif
+#include "perimortem/core/view/null_terminated.hpp"
+#include "perimortem/memory/global/vector.hpp"
 
-#include "perimortem/core/null_terminated.hpp"
+#include "ttx/data/form/native.hpp"
 
-#include "perimortem/memory/allocator/arena.hpp"
-
-#include "cuda/contracts/compiler.hpp"
-#include "demo/adapters/imports.hpp"
-
-using namespace Godot::Demo;
 using namespace Perimortem;
+using namespace Godot::Demo::Adapters::Cuda;
+namespace Form = Ttx::Data::Form;
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaProgram::_bind_methods() -> void {
+void TtxCudaProgram::_bind_methods() {
   godot::ClassDB::bind_method(
       godot::D_METHOD("compile", "source", "headers", "options"),
       &TtxCudaProgram::compile, DEFVAL(godot::Dictionary()),
@@ -35,249 +37,311 @@ auto Godot::Demo::Adapters::Cuda::TtxCudaProgram::_bind_methods() -> void {
       godot::D_METHOD("get_error"), &TtxCudaProgram::get_error);
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaProgram::compile_file(
+#ifndef TOOLCHAIN_WASM
+
+auto TtxCudaProgram::compile_file(
     const godot::String& path,
     const godot::Dictionary& headers,
     const godot::PackedStringArray& options) -> bool {
   const auto file = godot::FileAccess::open(path, godot::FileAccess::READ);
   if (file.is_null()) {
-    error = "CUDA project source could not be opened: " + path;
+    error = "CUDA source could not be opened: " + path;
     return false;
   }
 
   return compile(file->get_as_text(), headers, options);
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaProgram::compile(
+static auto diagnostic(void* context, perimortem_view_bytes message) -> void {
+  *Core::Data::cast<godot::String>(context) += godot::String::utf8(
+      Core::Data::cast<const char>(message.data), message.size);
+}
+
+auto TtxCudaProgram::compile(
     const godot::String& source,
     const godot::Dictionary& headers,
     const godot::PackedStringArray& options) -> bool {
-  error = "";
+  error = godot::String();
+
+  const godot::String path =
+      godot::ProjectSettings::get_singleton()->get_setting(
+          "ttx/cuda_compiler", "res://addons/godot_ttx/libttx_cuda.so");
+  Library* loaded = Library::open(path, error);
+  if (!loaded) {
+    return false;
+  }
+
+  auto abstract = loaded->get_abstract();
+  cuda_compiler compiler{};
+  if (abstract.operations->bind(
+          abstract.context, {TTX_CUDA_COMPILER_HIGH, TTX_CUDA_COMPILER_LOW},
+          &compiler) != TTX_NEGOTIATION_SATISFIED) {
+    abstract =
+        abstract.operations->resolve_route(abstract.context, "compiler"_view);
+    if (abstract.operations->bind(
+            abstract.context, {TTX_CUDA_COMPILER_HIGH, TTX_CUDA_COMPILER_LOW},
+            &compiler) != TTX_NEGOTIATION_SATISFIED) {
+      error = "The selected module does not provide a CUDA compiler.";
+      loaded->release();
+      return false;
+    }
+  }
+
   Memory::Allocator::Arena arena;
-  const auto copy = [&](const godot::String& value) -> perimortem_view_bytes {
+  auto copy = [&](const godot::String& value) -> perimortem_view_bytes {
     const auto encoded = value.utf8();
-    const auto bytes = arena.proxy(
+    return arena.copy(
         Core::View::Bytes(
-            reinterpret_cast<const U8*>(encoded.get_data()),
-            Count(encoded.length())));
-    return perimortem_view_bytes(bytes.get_data(), bytes.get_size());
+            perimortem_view_bytes{
+              Core::Data::cast<const U8>(encoded.get_data()),
+              Count(encoded.length())}));
   };
 
-  Memory::Dynamic::Vector<cuda_source> included;
-  const godot::Array names = headers.keys();
-  for (int64_t i = 0; i != names.size(); ++i) {
-    included.insert(cuda_source(copy(names[i]), copy(headers[names[i]])));
+  Memory::Global::Vector<cuda_source> includes;
+  const auto names = headers.keys();
+  for (GDExtensionInt i = 0; i < names.size(); ++i) {
+    includes.insert({copy(names[i]), copy(headers[names[i]])});
   }
 
-  Memory::Dynamic::Vector<perimortem_view_bytes> selected;
-  for (int64_t i = 0; i != options.size(); ++i) {
-    selected.insert(copy(options[i]));
+  Memory::Global::Vector<perimortem_view_bytes> arguments;
+  for (GDExtensionInt i = 0; i < options.size(); ++i) {
+    arguments.insert(copy(options[i]));
   }
 
-  const cuda_compile_request request = cuda_compile_request(
-      {copy("project.cu"), copy(source)}, included.get_view().get_data(),
-      included.get_size(), selected.get_view().get_data(), selected.get_size(),
-      0);
+  const cuda_compile_request request{
+    {copy("project.cu"), copy(source)},
+    includes.get_data(),
+    includes.get_size(),
+    arguments.get_data(),
+    arguments.get_size(),
+    0};
 
-  using namespace Ttx::Semantic::Negotiation;
-  Memory::Dynamic::Bytes diagnostic;
-  bool success = false;
-  auto receive = [&](Ttx::Concept::Abstract root) {
-    if (root.supports<::Cuda::Contracts::Compiler>() ==
-        Binding::Status::Unknown) {
-      root = root.resolve_concept("Compiler"_view);
+  ttx_retained acquired{};
+  const auto status = compiler.operations->compile(
+      compiler.context, request, {&error, diagnostic}, &acquired);
+  if (status != CUDA_SUCCESS_STATUS) {
+    if (error.is_empty()) {
+      error = "CUDA compilation failed.";
     }
-    root.bind<::Cuda::Contracts::Compiler>().visit(
-        [&](::Cuda::Contracts::Compiler compiler) {
-          compiler.compile(request, diagnostic)
-              .visit(
-                  [&](Ttx::Concept::Policies::Borrowed acquired) {
-                    acquired.bind<::Cuda::Contracts::Program>().visit(
-                        [&](::Cuda::Contracts::Program value) {
-                          const auto previous = publication;
-                          publication = acquired;
-                          program = value;
-                          success = true;
-                          if (previous) {
-                            previous->release();
-                          }
-                        },
-                        [&](Binding::Failure) {
-                          acquired.release();
-                          error = "Compiled subject did not bind Program.";
-                        });
-                  },
-                  [&](Ttx::Data::Status) {
-                    error = diagnostic.is_empty()
-                                ? godot::String("CUDA compilation failed.")
-                                : godot::String::utf8(
-                                      reinterpret_cast<const char*>(
-                                          diagnostic.get_view().get_data()),
-                                      diagnostic.get_size());
-                  });
-        },
-        [&](Binding::Failure) {
-          error = "The imported provider did not bind the CUDA Compiler.";
-        });
-  };
-  const auto configured =
-      godot::String(
-          godot::ProjectSettings::get_singleton()->get_setting(
-              "ttx/cuda_compiler", "cuda"))
-          .utf8();
-  const perimortem_view_bytes input = perimortem_view_bytes(
-      reinterpret_cast<const U8*>(configured.get_data()),
-      Count(configured.length()));
-  if (Adapters::imports().visit(
-          &input,
-          Ttx::Data::Form::Compiled<Ttx::Data::Form::Native<
-              perimortem_view_bytes>::reference>::get_representation(),
-          receive) != Binding::Status::Satisfied &&
-      error.is_empty()) {
-    error = "CUDA could not load a compiler in this environment.";
-  }
-  return success;
-}
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaProgram::allocate(int64_t size)
-    -> godot::Ref<TtxCudaBuffer> {
-  if (!program || size <= 0) {
-    error = "Buffer allocation requires a program and positive extent.";
-    return godot::Ref<TtxCudaBuffer>();
+    loaded->release();
+    return false;
   }
 
-  using namespace Ttx::Semantic::Negotiation;
-  godot::Ref<TtxCudaBuffer> result;
-  program->allocate(size).visit(
-      [&](Ttx::Concept::Policies::Borrowed subject) {
-        result = TtxCudaBuffer::adopt(subject);
-      },
-      [&](Ttx::Data::Status) { error = "CUDA buffer allocation failed."; });
-  return result;
-}
-
-static auto primitive(const godot::String& name)
-    -> Core::Option<Ttx::Data::Form::Schema::Value> {
-  using Value = Ttx::Data::Form::Schema::Value;
-  const char* names[] = {"u8",  "u16", "u32", "u64", "s8",    "s16",
-                         "s32", "s64", "r32", "r64", "buffer"};
-
-  const Value values[] = {Value::U8,  Value::U16, Value::U32, Value::U64,
-                          Value::S8,  Value::S16, Value::S32, Value::S64,
-                          Value::R32, Value::R64, Value::U64};
-
-  for (Count i = 0; i != 11; ++i) {
-    if (name == names[i]) {
-      return values[i];
+  const auto result = acquired.operations->get_abstract(acquired.context);
+  cuda_program api{};
+  if (result.operations->bind(
+          result.context, {TTX_CUDA_PROGRAM_HIGH, TTX_CUDA_PROGRAM_LOW},
+          &api) != TTX_NEGOTIATION_SATISFIED) {
+    if (acquired.operations->release(acquired.context) != TTX_RELEASE_SUCCESS) {
+      godot::UtilityFunctions::push_error("CUDA program cleanup failed.");
     }
+
+    loaded->release();
+    error = "Compiled result does not provide Program.";
+    return false;
   }
 
-  return Core::Option<Ttx::Data::Form::Schema::Value>();
+  const auto previous = retained;
+  auto* previous_library = library;
+  retained = acquired;
+  program = api;
+  library = loaded;
+  if (previous.operations &&
+      previous.operations->release(previous.context) != TTX_RELEASE_SUCCESS) {
+    godot::UtilityFunctions::push_error("CUDA program cleanup failed.");
+  }
+
+  if (previous_library) {
+    previous_library->release();
+  }
+
+  return true;
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaProgram::prepare(
+auto TtxCudaProgram::allocate(GDExtensionInt size) -> godot::Ref<TtxCudaBuffer> {
+  if (!program.operations || size <= 0) {
+    error = "Buffer allocation requires a program and positive size.";
+    return {};
+  }
+
+  ttx_retained acquired{};
+  if (program.operations->allocate(program.context, size, &acquired) !=
+      CUDA_SUCCESS_STATUS) {
+    error = "CUDA buffer allocation failed.";
+    return {};
+  }
+
+  return TtxCudaBuffer::adopt(acquired, *library);
+}
+
+auto TtxCudaProgram::prepare(
     const godot::String& entry,
     const godot::Array& description) -> godot::Ref<TtxCudaKernel> {
-  using Schema = Ttx::Data::Form::Schema;
-  using Representation = Ttx::Data::Form::Representation;
-  if (!program) {
+  if (!program.operations) {
     error = "Compile a program before preparing a kernel.";
-    return godot::Ref<TtxCudaKernel>();
+    return {};
   }
 
-  error = "";
-  Memory::Allocator::Arena arena;
-  Memory::Dynamic::Vector<Schema::Position> positions;
-  Memory::Dynamic::Vector<cuda_argument> native;
-  Memory::Dynamic::Vector<TtxCudaKernel::Argument> arguments;
+  if (description.size() > 256) {
+    error = "Kernel arguments exceed the lab's limit.";
+    return {};
+  }
+
+  error = godot::String();
+
+  using Schema = Form::Schema;
+  using Value = Schema::Value;
+  Memory::Global::Vector<Schema> schemas(description.size());
+  Memory::Global::Vector<Schema::Position> positions;
+  Memory::Global::Vector<Form::Representation> forms(description.size());
+  Memory::Global::Vector<cuda_argument> native;
+  Memory::Global::Vector<TtxCudaKernel::Argument> arguments;
   Count extent = 0, alignment = 1;
-  for (int64_t i = 0; i != description.size(); ++i) {
+  for (GDExtensionInt i = 0; i < description.size(); ++i) {
     const godot::Variant item = description[i];
     const bool bytes = item.get_type() == godot::Variant::DICTIONARY;
     const godot::String name =
         bytes ? godot::String("bytes") : godot::String(item);
-    const auto value = primitive(name);
-    if (!bytes && !value) {
-      error = "Unsupported CUDA argument carrier: " + name;
-      return godot::Ref<TtxCudaKernel>();
+    const char* names[]{"u8",  "u16", "u32", "u64", "s8",    "s16",
+                        "s32", "s64", "r32", "r64", "buffer"};
+
+    const Value types[]{Value::U8,  Value::U16, Value::U32, Value::U64,
+                        Value::S8,  Value::S16, Value::S32, Value::S64,
+                        Value::R32, Value::R64, Value::U64};
+
+    int selected = -1;
+    for (int n = 0; n < 11; ++n) {
+      if (name == names[n]) {
+        selected = n;
+      }
     }
 
-    Count size = 0, align = 1;
-    const Schema* schema = nullptr;
+    if (!bytes && selected < 0) {
+      error = "Unsupported kernel argument: " + name;
+      return {};
+    }
+
+    Count size, boundary;
     if (bytes) {
       const godot::Dictionary spec = item;
-      const int64_t supplied = spec.get("size", 0),
-                    boundary = spec.get("alignment", 1);
-      if (supplied <= 0 || boundary <= 0 || (boundary & (boundary - 1))) {
-        error =
-            "Aggregate arguments require positive size and power of two "
-            "alignment.";
-        return godot::Ref<TtxCudaKernel>();
+      const GDExtensionInt length = spec.get("size", 0), align = spec.get("alignment", 1);
+      if (length <= 0 || length > 1048576 || align <= 0 || align > 4096 ||
+          (align & (align - 1))) {
+        error = "Invalid aggregate size or alignment.";
+        return {};
       }
 
-      size = supplied;
-      align = boundary;
-      schema = &arena.construct<Schema>(Schema::range(
-          Ttx::Data::Form::Native<U8>::reference, size, 1, size, align));
+      size = length;
+      boundary = align;
+      schemas.insert(
+          Schema::range(Form::Native<U8>::reference, size, 1, size, boundary));
     } else {
-      schema = &arena.construct<Schema>(Schema::primitive(*value));
-      size = Schema::get_width(*value);
-      align = size;
+      size = Schema::get_width(types[selected]);
+      boundary = size;
+      schemas.insert(Schema::primitive(types[selected]));
     }
 
-    extent = (extent + align - 1) & ~(align - 1);
-    alignment = Core::Math::max(alignment, align);
-    const Representation* prepared = nullptr;
-    Representation::compile(*schema, arena)
+    extent = (extent + boundary - 1) & ~(boundary - 1);
+    if (boundary > alignment) {
+      alignment = boundary;
+    }
+
+    bool compiled = false;
+    Form::Representation::compile(schemas.get_data()[i])
         .visit(
-            [&](const Representation& form) { prepared = &form; },
-            [](Ttx::Data::Status) {});
-    if (!prepared) {
-      error = "CUDA argument representation could not be prepared.";
-      return godot::Ref<TtxCudaKernel>();
+            [&](Form::Representation& form) {
+              forms.insert(Core::Data::take(form));
+              compiled = true;
+            },
+
+            [&](Ttx::Data::Status status) {});
+    if (!compiled) {
+      error = "Argument representation could not be compiled.";
+      return {};
     }
 
-    positions.emplace(Schema::Position(*schema, extent));
-    native.insert(cuda_argument(extent, prepared));
+    positions.insert(Schema::Position(schemas.get_data()[i], extent));
+    native.insert(cuda_argument{extent, &forms.get_data()[i].get_abi()});
     arguments.insert(
-        TtxCudaKernel::Argument(
-            value ? *value : Schema::Value::U8, extent, size, name == "buffer",
-            bytes));
+        TtxCudaKernel::Argument{
+          bytes ? Value::U8 : types[selected], extent, size, name == "buffer",
+          bytes});
+
     extent += size;
   }
 
   extent = (extent + alignment - 1) & ~(alignment - 1);
+
   const auto schema =
       Schema::composite(positions.get_view(), extent, alignment);
   godot::Ref<TtxCudaKernel> result;
-  Representation::compile(schema, arena)
-      .visit(
-          [&](const Representation& form) {
-            const auto named = entry.utf8();
-            Memory::Dynamic::Bytes diagnostic;
-            program
-                ->prepare(
-                    {reinterpret_cast<const U8*>(named.get_data()),
-                     Count(named.length())},
-                    form, native.get_view(), diagnostic)
-                .visit(
-                    [&](Ttx::Concept::Policies::Borrowed subject) {
-                      result = TtxCudaKernel::adopt(
-                          subject, form, Core::Data::take(arguments));
-                    },
-                    [&](Ttx::Data::Status status) {
-                      error = "CUDA kernel preparation failed with status " +
-                              godot::String::num_int64(int(status));
-                    });
-          },
-          [&](Ttx::Data::Status) {
-            error = "CUDA argument frame could not be prepared.";
-          });
+  Form::Representation::compile(schema).visit(
+      [&](Form::Representation& form) {
+        const auto name = entry.utf8();
+        ttx_retained acquired{};
+        const auto status = program.operations->prepare(
+            program.context,
+            {Core::Data::cast<const U8>(name.get_data()), Count(name.length())},
+            &form.get_abi(), native.get_data(), native.get_size(),
+            {&error, diagnostic}, &acquired);
+        if (status == CUDA_SUCCESS_STATUS) {
+          result = TtxCudaKernel::adopt(
+              acquired, *library, form, Core::Data::take(arguments));
+        } else if (error.is_empty()) {
+          error = "CUDA kernel preparation failed.";
+        }
+      },
+
+      [&](Ttx::Data::Status status) {
+        error = "Kernel frame could not be compiled.";
+      });
+
   return result;
 }
 
-Godot::Demo::Adapters::Cuda::TtxCudaProgram::~TtxCudaProgram() {
-  if (publication) {
-    publication->release();
+TtxCudaProgram::~TtxCudaProgram() {
+  if (retained.operations &&
+      retained.operations->release(retained.context) != TTX_RELEASE_SUCCESS) {
+    godot::UtilityFunctions::push_error("CUDA program cleanup failed.");
+  }
+
+  if (library) {
+    library->release();
   }
 }
+
+#else
+
+// Godot keeps the same Resource names so projects can report unavailable
+// CUDA capabilities through their existing provider-selection UI.
+TtxCudaProgram::~TtxCudaProgram() = default;
+auto TtxCudaProgram::compile_file(
+    const godot::String& path,
+    const godot::Dictionary& headers,
+    const godot::PackedStringArray& options) -> bool {
+  error = "CUDA is unavailable in the Web platform.";
+  return false;
+}
+
+auto TtxCudaProgram::compile(
+    const godot::String& source,
+    const godot::Dictionary& headers,
+    const godot::PackedStringArray& options) -> bool {
+  error = "CUDA is unavailable in the Web platform.";
+  return false;
+}
+
+auto TtxCudaProgram::allocate(GDExtensionInt size) -> godot::Ref<TtxCudaBuffer> {
+  error = "CUDA is unavailable in the Web platform.";
+  return {};
+}
+
+auto TtxCudaProgram::prepare(
+    const godot::String& entry,
+    const godot::Array& description) -> godot::Ref<TtxCudaKernel> {
+  error = "CUDA is unavailable in the Web platform.";
+  return {};
+}
+
+#endif

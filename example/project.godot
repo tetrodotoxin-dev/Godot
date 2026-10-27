@@ -1,0 +1,29 @@
+; TTX Image Lab: the engine hosts the scene; source Resources select providers.
+config_version=5
+
+[application]
+config/name="TTX Image Lab"
+run/main_scene="res://lab.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/godot_ttx/plugin.cfg", "res://addons/godot_ttx/providers/plugin.cfg")
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=760
+window/size/window_width_override=1440
+window/size/window_height_override=760
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.043137, 0.043137, 0.058824, 1)
+
+[ttx]
+modules=["res://addons/godot_ttx/libcounter_extension.so", "res://addons/godot_ttx/libcpu_provider.so"]
+modules.web=["res://addons/godot_ttx/web/libcounter_extension.so", "res://addons/godot_ttx/web/libcpu_provider.so"]
+image_modules={"cpu":"res://addons/godot_ttx/libcpu_provider.so"}
+image_modules.web={"cpu":"res://addons/godot_ttx/web/libcpu_provider.so"}
+cuda_compiler="res://addons/godot_ttx/libttx_cuda.so"

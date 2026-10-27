@@ -3,48 +3,48 @@
 
 #pragma once
 
-#include "perimortem/memory/dynamic/bytes.hpp"
+#define TOOLCHAIN_PRIVATE_HEADER 1
 
-#include "demo/imaging/publication/image.hpp"
+#include "perimortem/core/storage/result.hpp"
+#include "perimortem/memory/global/bytes.hpp"
+
+#include "demo/imaging/contracts/provider.h"
 
 namespace Godot::Demo::Imaging::Cpu {
 
-// The CPU provider owns ordinary RGBA8 bytes and can lend them directly to its
-// own algorithms. A derived result takes ownership of a new buffer, leaving
-// earlier publications intact for snapshots and cached graph branches.
-// Foreign consumers receive the public image contract. Only this module's
-// thunks recover the native Image and its writable storage.
-class Image : public Imaging::Publication::Image {
+// CPU images publish immutable RGBA8 snapshots through Graph. Each acquisition
+// keeps the pixels alive independently. This provider interprets Image's
+// context. Foreign images are read through Compute Pixels before composition.
+class Image {
  public:
-  static auto
-      create(U32 width, U32 height, Perimortem::Core::View::Bytes pixels)
-          -> Perimortem::Utility::Result<Image&, Perimortem::Core::View::Bytes>;
-  auto derive(Perimortem::Memory::Dynamic::Bytes&& pixels) const -> Image&;
-  auto get_pixels() const -> Perimortem::Core::View::Bytes {
-    return data.get_view();
-  }
-
- protected:
-  auto supports(Perimortem::System::Uuid contract) const
-      -> Ttx::Semantic::Negotiation::Binding::Status override;
-  auto fulfill(
-      Perimortem::System::Uuid contract,
-      Ttx::Data::Form::Storage requested) const
-      -> Ttx::Semantic::Negotiation::Binding::Status override;
-  auto read_pixels(Perimortem::Core::Access::Bytes target) const
-      -> Perimortem::Core::View::Bytes override;
-
- private:
-  Image(
-      U8* allocation,
+  Image(U32 width, U32 height, Perimortem::Memory::Global::Bytes pixels);
+  ~Image();
+  static auto create(
       U32 width,
       U32 height,
-      Perimortem::Memory::Dynamic::Bytes&& pixels);
-  Image(
-      U8* allocation,
-      const Image& source,
-      Perimortem::Memory::Dynamic::Bytes&& pixels);
-  Perimortem::Memory::Dynamic::Bytes data;
+      Perimortem::Memory::Global::Bytes pixels) -> ttx_retained;
+  auto get_width() const -> U32 { return width; }
+  auto get_height() const -> U32 { return height; }
+  auto get_pixels() const -> Perimortem::Core::View::Bytes {
+    return pixels.get_view();
+  }
+
+  auto graph() -> ttx_abstract;
+  auto acquire() -> ttx_retained;
+  auto release() -> ttx_release_status;
+
+ private:
+  Count references = 1;
+  U32 width;
+  U32 height;
+  Perimortem::Memory::Global::Bytes pixels;
 };
+
+// The FFT implementation owns its scratch and returns independent pixel bytes.
+// Its caller validates the kernel before entering the transform.
+auto convolve(const Image& image, image_kernel kernel)
+    -> Perimortem::Core::Storage::Result<
+        Perimortem::Memory::Global::Bytes,
+        Perimortem::Core::View::Bytes>;
 
 }  // namespace Godot::Demo::Imaging::Cpu

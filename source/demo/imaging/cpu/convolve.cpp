@@ -1,18 +1,16 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-#include "demo/imaging/cpu/convolve.hpp"
+#include "pocketfft_hdronly.h"
 
-#include <pocketfft_hdronly.h>
+#include "perimortem/core/view/null_terminated.hpp"
+#include "perimortem/memory/global/vector.hpp"
 
-#include "perimortem/core/null_terminated.hpp"
-
-#include "perimortem/memory/dynamic/vector.hpp"
-
-#include "demo/imaging/contracts/kernel.hpp"
+#include "demo/imaging/cpu/image.hpp"
 
 using namespace Godot::Demo;
 using namespace Perimortem;
+using namespace Perimortem::Core;
 
 // Three image planes and one kernel plane share the same padded dimensions.
 // Zeroing the surrounding region makes the transform describe linear
@@ -33,14 +31,14 @@ static void pad(
     for (U32 x = 0; x < image.get_width(); ++x) {
       for (U32 c = 0; c < 3; ++c) {
         planes[c * count + Count(y) * pw + x] =
-            input[(Count(y) * image.get_width() + x) * 4 + c];
+            input.get_data()[(Count(y) * image.get_width() + x) * 4 + c];
       }
     }
   }
 
   for (U32 y = 0; y < kh; ++y) {
     for (U32 x = 0; x < kw; ++x) {
-      kernel[Count(y) * pw + x] = weights[Count(y) * kw + x];
+      kernel[Count(y) * pw + x] = weights.get_data()[Count(y) * kw + x];
     }
   }
 }
@@ -64,11 +62,12 @@ static auto crop(
     U32 kh,
     U32 pw,
     U32 ph,
-    const R32* planes) -> Memory::Dynamic::Bytes {
+    const R32* planes) -> Memory::Global::Bytes {
   const auto input = image.get_pixels();
   const Count count = Count(pw) * ph;
-  Memory::Dynamic::Bytes output;
+  Memory::Global::Bytes output;
   output.forgetful_resize(input.get_size());
+
   auto pixels = output.get_access();
   // Full zero padded convolution is cropped around the authored kernel center.
   // Alpha is carried from the source, so filtering RGB cannot erase coverage.
@@ -83,7 +82,7 @@ static auto crop(
                                                        : U8(value + R32(0.5));
       }
 
-      pixels.get_data()[target + 3] = input[target + 3];
+      pixels.get_data()[target + 3] = input.get_data()[target + 3];
     }
   }
 
@@ -95,7 +94,7 @@ static auto transform(
     U32 kw,
     U32 kh,
     Core::View::Vector<R32> weights)
-    -> Utility::Result<Memory::Dynamic::Bytes, Core::View::Bytes> {
+    -> Core::Storage::Result<Memory::Global::Bytes, Core::View::Bytes> {
   U32 pw = 1;
   U32 ph = 1;
   while (pw < image.get_width() + kw - 1) {
@@ -116,8 +115,8 @@ static auto transform(
   // receives the inverse output before crop publishes independently owned RGBA.
   const Count columns = pw / 2 + 1;
   const Count frequencies = columns * ph;
-  Memory::Dynamic::Vector<R32> real;
-  Memory::Dynamic::Vector<std::complex<R32>> spectrum;
+  Memory::Global::Vector<R32> real;
+  Memory::Global::Vector<std::complex<R32>> spectrum;
   real.resize(4 * count);
   spectrum.resize(4 * frequencies);
   pad(image, kw, kh, weights, pw, ph, real.get_data());
@@ -126,10 +125,12 @@ static auto transform(
   const pocketfft::stride_t real_stride(
       {std::ptrdiff_t(count * sizeof(R32)), std::ptrdiff_t(pw * sizeof(R32)),
        sizeof(R32)});
+
   const pocketfft::stride_t spectrum_stride(
       {std::ptrdiff_t(frequencies * sizeof(std::complex<R32>)),
        std::ptrdiff_t(columns * sizeof(std::complex<R32>)),
        sizeof(std::complex<R32>)});
+
   pocketfft::r2c(
       shape, real_stride, spectrum_stride, pocketfft::shape_t({1, 2}),
       pocketfft::FORWARD, real.get_data(), spectrum.get_data(), R32(1));
@@ -150,29 +151,12 @@ static auto transform(
   return crop(image, kw, kh, pw, ph, real.get_data());
 }
 
-auto Imaging::Cpu::Convolve::apply(const Image& image, image_kernel kernel)
-    -> Utility::Result<Image&, Core::View::Bytes> {
-  const Core::View::Vector<R32> weights(kernel.values, kernel.count);
-  const auto invalid = Imaging::Contracts::Kernel::validate(
-      kernel.width, kernel.height, weights);
-  if (!invalid.is_empty()) {
-    return invalid;
-  }
-
-  // PocketFFT reports allocation and argument failures with C++ exceptions.
-  // They end inside this provider. Callers still receive the image contract's
-  // borrowed diagnostic rather than an exception crossing a foreign call.
+auto Imaging::Cpu::convolve(const Image& image, image_kernel kernel)
+    -> Core::Storage::Result<Memory::Global::Bytes, Core::View::Bytes> {
   try {
-    return transform(image, kernel.width, kernel.height, weights)
-        .visit(
-            [&](Memory::Dynamic::Bytes& pixels)
-                -> Utility::Result<Image&, Core::View::Bytes> {
-              return image.derive(Core::Data::take(pixels));
-            },
-            [](Core::View::Bytes error)
-                -> Utility::Result<Image&, Core::View::Bytes> {
-              return error;
-            });
+    return transform(
+        image, kernel.width, kernel.height,
+        Core::View::Vector<R32>(*kernel.values, kernel.count));
   } catch (const std::bad_alloc&) {
     return "CPU convolution could not allocate transform storage."_view;
   } catch (const std::exception&) {

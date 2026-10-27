@@ -1,66 +1,43 @@
-# # Tetrodotoxin
-# Copyright (c) 2023-present Matt Kaes and contributors
+load("@tetro_toolchain//:defs.bzl", "library", "WEB", "WINDOWS")
 
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-
-package(default_visibility = ["//visibility:public"])
-
-cc_library(
-    name = "imaging",
+library(
+    name = "demo",
+    module = "godot_demo",
+    linkage = "shared",
+    srcs = ["register.cpp", "imaging/ttx_image.cpp", "imaging/ttx_image.hpp", "imaging/scripts/bridge.cpp", "imaging/scripts/bridge.hpp"] + glob(["cuda/*.cpp", "cuda/*.hpp"]),
     includes = ["../.."],
-    srcs = glob(["imaging/**/*.cpp"]),
-    hdrs = glob(["imaging/**/*.hpp"]) + ["imports.hpp"],
-    copts = [
-        "-fvisibility=hidden",
-        "-frtti",
-    ],
-    deps = [
-        "//source/godot_ttx:extension",
-        "//source/demo/imaging/contracts",
-        "//source/demo/imaging/graph",
-        "//source/demo/imaging/publication",
-    ] + select({
-        "//:web": ["@godot_cpp_web//:godot_cpp"],
-        "//conditions:default": ["@godot_cpp"],
-    }),
+    local_defines = ["GODOT_CUDA_ADAPTER"],
+    copts = ["-frtti", "-fvisibility-inlines-hidden", "-include", "godot_cpp/core/memory.hpp"],
+    linkopts = select({WEB: ["-Wl,--export=__wasm_call_ctors"], "//conditions:default": []}),
+    shared_lib_name = select({WINDOWS: "godot_demo.dll", "//conditions:default": "libgodot_demo.so"}),
+    implementation_deps = ["//source/demo/imaging/contracts", "@perimortem//:system", "@perimortem//:serialization"] + select({WEB: [], "//conditions:default": ["@compute_cuda//:headers"]}) + select({WEB: ["@godot_cpp_web//:godot_cpp"], "//conditions:default": ["@godot_cpp//:godot_cpp"]}),
+    visibility = ["//visibility:public"],
 )
 
-cc_library(
-    name = "cuda",
-    includes = ["../.."],
-    srcs = glob(["cuda/*.cpp"]),
-    hdrs = glob(["cuda/*.hpp"]) + ["imports.hpp"],
-    copts = [
-        "-fvisibility=hidden",
-        "-frtti",
-    ],
-    deps = [
-        "//source/godot_ttx:extension",
-        "@ttx_cuda//cuda/contracts",
-    ] + select({
-        "//:web": ["@godot_cpp_web//:godot_cpp"],
-        "//conditions:default": ["@godot_cpp"],
-    }),
+filegroup(name = "runtime", srcs = [":demo_shared"], visibility = ["//visibility:public"])
+
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
+
+pkg_files(
+    name = "resources",
+    srcs = glob(["imaging/resources/*.gd", "imaging/editor/*.gd", "cuda/resources/*.gd", "cuda/editor/*.gd"]) + ["editor.gd", "plugin.cfg", "godot_demo.gdextension"],
+    strip_prefix = strip_prefix.from_pkg(),
+    prefix = "addons/godot_ttx",
+    visibility = ["//visibility:public"],
 )
 
-filegroup(
-    name = "scripts",
-    srcs = glob(["imaging/scripts/*.gd"]),
-)
-
-filegroup(
+pkg_files(
     name = "scene",
     srcs = glob(["imaging/scene/*.gd"]),
+    strip_prefix = strip_prefix.from_pkg("imaging/scene"),
+    prefix = "addons/godot_ttx/scene",
+    visibility = ["//visibility:public"],
 )
 
-filegroup(
-    name = "resources",
-    srcs = glob([
-        "imaging/resources/*.gd",
-        "imaging/editor/*.gd",
-        "cuda/resources/*.gd",
-        "cuda/editor/*.gd",
-    ]),
+pkg_files(
+    name = "scripts",
+    srcs = glob(["imaging/scripts/*.gd"]),
+    strip_prefix = strip_prefix.from_pkg("imaging/scripts"),
+    prefix = "addons/godot_ttx/gdscript",
+    visibility = ["//visibility:public"],
 )
-
-exports_files(["register.cpp", "editor.gd", "plugin.cfg", "godot_demo.gdextension"])

@@ -7,9 +7,9 @@ extends RefCounted
 # These UUIDs name the same callable promises as contracts/image.h. The bridge
 # asks only for the contract being bound. Returning a Callable supplies it;
 # Unknown leaves the question unsettled, while Rejected explicitly refuses it.
-const INVERT = "aa57de9d-d269-4e29-8892-5a047fbf0601"
-const CONVOLVE = "aa57de9d-d269-4e29-8892-5a047fbf0602"
-const COMPOSITE = "aa57de9d-d269-4e29-8892-5a047fbf0603"
+const INVERT = "c5f32a68-1edf-425e-b817-59d7620fa301"
+const CONVOLVE = "c5f32a68-1edf-425e-b817-59d7620fa302"
+const COMPOSITE = "c5f32a68-1edf-425e-b817-59d7620fa303"
 const UNKNOWN = 1
 const REJECTED = 3
 

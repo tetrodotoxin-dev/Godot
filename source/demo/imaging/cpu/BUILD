@@ -1,63 +1,30 @@
-# # Tetrodotoxin
-# Copyright (c) 2023-present Matt Kaes and contributors
-
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_shared_library.bzl", "cc_shared_library")
 
-package(default_visibility = ["//visibility:public"])
+load("@tetro_toolchain//:defs.bzl", "library", "WEB", "WINDOWS")
 
-cc_library(
-    name = "cpu",
+library(
+    name = "cpu_provider",
+    module = "lab_cpu",
+    linkage = "shared",
+    srcs = ["provider.cpp", "module.c", "image.hpp"],
     includes = ["../../.."],
-    srcs = glob(
-        ["*.cpp"],
-        exclude = ["module.cpp"],
-    ),
-    hdrs = glob(["*.hpp"]),
-    copts = [
-        "-fvisibility=hidden",
-        "-fexceptions",
-    ] + select({
-        "//:web": ["-fwasm-exceptions"],
-        "//conditions:default": [],
-    }),
-    deps = [
-        "//source/demo/imaging/contracts",
-        "//source/demo/imaging/publication",
-        "@pocketfft",
-    ],
+    copts = ["-fexceptions", "-fvisibility-inlines-hidden"] + select({WEB: ["-fwasm-exceptions"], "//conditions:default": []}),
+    linkopts = select({WEB: ["-fwasm-exceptions", "-Wl,--export=__wasm_call_ctors"], "//conditions:default": []}),
+    shared_lib_name = select({WINDOWS: "cpu_provider.dll", "//conditions:default": "libcpu_provider.so"}),
+    implementation_deps = ["//source/demo/imaging/contracts", ":convolution"],
+    visibility = ["//visibility:public"],
 )
 
+filegroup(name = "runtime", srcs = [":cpu_provider_shared"], visibility = ["//visibility:public"])
 exports_files(["pocketfft.BUILD.bazel"])
 
+# PocketFFT owns its standard-library dependency. Its one translation unit
+# establishes that host environment before including the shared runtime SDK.
 cc_library(
-    name = "module",
+    name = "convolution",
+    srcs = ["convolve.cpp"],
+    hdrs = ["image.hpp"],
     includes = ["../../.."],
-    srcs = ["module.cpp"],
-    copts = ["-fvisibility=hidden"],
-    deps = [
-        "//source/demo/imaging/contracts",
-        "//source/demo/imaging/cpu",
-        "//source/demo/imaging/render",
-        "//source/demo/sampling:provider",
-        "//source/demo/sampling/cpu",
-    ],
-)
-
-cc_shared_library(
-    name = "cpu_provider",
-    dynamic_deps = [
-        "//source/demo:support",
-    ],
-    shared_lib_name = "libcpu_provider.so",
-    user_link_flags = select({
-        "//:web": [
-            "-fwasm-exceptions",
-        ],
-        "//conditions:default": [
-            "-Wl,-z,defs",
-            "-Wl,-rpath,$ORIGIN",
-        ],
-    }),
-    deps = [":module"],
+    copts = ["-fexceptions", "-fvisibility-inlines-hidden", "-include", "pocketfft_hdronly.h"] + select({WEB: ["-fwasm-exceptions"], "//conditions:default": []}),
+    deps = ["//source/demo/imaging/contracts", "@pocketfft"],
 )

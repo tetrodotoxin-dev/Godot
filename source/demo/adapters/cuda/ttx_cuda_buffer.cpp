@@ -3,12 +3,12 @@
 
 #include "demo/adapters/cuda/ttx_cuda_buffer.hpp"
 
-#include <godot_cpp/core/class_db.hpp>
+#include "godot_cpp/core/class_db.hpp"
+#include "godot_cpp/variant/utility_functions.hpp"
 
-using namespace Godot::Demo;
-using namespace Perimortem;
+using namespace Godot::Demo::Adapters::Cuda;
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::_bind_methods() -> void {
+void TtxCudaBuffer::_bind_methods() {
   godot::ClassDB::bind_method(
       godot::D_METHOD("write", "bytes", "offset"), &TtxCudaBuffer::write,
       DEFVAL(0));
@@ -17,54 +17,94 @@ auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::_bind_methods() -> void {
       godot::D_METHOD("get_size"), &TtxCudaBuffer::get_size);
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::adopt(
-    Ttx::Concept::Policies::Borrowed subject) -> godot::Ref<TtxCudaBuffer> {
-  using namespace Ttx::Semantic::Negotiation;
+#ifndef TOOLCHAIN_WASM
+
+auto TtxCudaBuffer::adopt(ttx_retained acquired, Library& library)
+    -> godot::Ref<TtxCudaBuffer> {
+  const auto abstract = acquired.operations->get_abstract(acquired.context);
+  cuda_buffer api{};
+  if (abstract.operations->bind(
+          abstract.context, {TTX_CUDA_BUFFER_HIGH, TTX_CUDA_BUFFER_LOW},
+          &api) != TTX_NEGOTIATION_SATISFIED) {
+    if (acquired.operations->release(acquired.context) != TTX_RELEASE_SUCCESS) {
+      godot::UtilityFunctions::push_error("CUDA buffer cleanup failed.");
+    }
+
+    return {};
+  }
+
   godot::Ref<TtxCudaBuffer> result;
-  subject.bind<::Cuda::Contracts::Buffer>().visit(
-      [&](::Cuda::Contracts::Buffer api) {
-        result.instantiate();
-        result->owner = subject;
-        result->buffer = api;
-      },
-      [&](Binding::Failure) { subject.release(); });
+  result.instantiate();
+  result->retained = acquired;
+  result->buffer = api;
+  library.retain();
+  result->library = &library;
   return result;
 }
 
-Godot::Demo::Adapters::Cuda::TtxCudaBuffer::~TtxCudaBuffer() {
-  if (owner) {
-    owner->release();
+TtxCudaBuffer::~TtxCudaBuffer() {
+  if (retained.operations &&
+      retained.operations->release(retained.context) != TTX_RELEASE_SUCCESS) {
+    godot::UtilityFunctions::push_error("CUDA buffer cleanup failed.");
+  }
+
+  if (library) {
+    library->release();
   }
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::get_address() const -> U64 {
-  return buffer ? buffer->get_address() : 0;
+auto TtxCudaBuffer::get_address() const -> U64 {
+  return buffer.operations ? buffer.operations->address(buffer.context) : 0;
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::get_size() const -> int64_t {
-  return buffer ? buffer->get_size() : 0;
+auto TtxCudaBuffer::get_size() const -> GDExtensionInt {
+  return buffer.operations ? buffer.operations->size(buffer.context) : 0;
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::write(
-    const godot::PackedByteArray& bytes,
-    int64_t offset) -> bool {
-  return buffer && offset >= 0 &&
-         buffer->write(offset, {bytes.ptr(), Count(bytes.size())}) ==
-             Ttx::Data::Status::Success;
+auto TtxCudaBuffer::write(const godot::PackedByteArray& bytes, GDExtensionInt offset)
+    -> bool {
+  return buffer.operations && offset >= 0 &&
+         buffer.operations->write(
+             buffer.context, offset, {bytes.ptr(), Count(bytes.size())}) ==
+             CUDA_SUCCESS_STATUS;
 }
 
-auto Godot::Demo::Adapters::Cuda::TtxCudaBuffer::read() const
-    -> godot::PackedByteArray {
+auto TtxCudaBuffer::read() const -> godot::PackedByteArray {
   godot::PackedByteArray result;
-  if (!buffer) {
+  if (!buffer.operations) {
     return result;
   }
 
-  result.resize(buffer->get_size());
-  if (buffer->read(0, {result.ptrw(), Count(result.size())}) !=
-      Ttx::Data::Status::Success) {
+  result.resize(buffer.operations->size(buffer.context));
+  if (buffer.operations->read(
+          buffer.context, 0, result.ptrw(), result.size()) !=
+      CUDA_SUCCESS_STATUS) {
     result.clear();
   }
 
   return result;
 }
+
+#else
+
+// Godot keeps the same Resource names so projects can report unavailable
+// CUDA capabilities through their existing provider-selection UI.
+TtxCudaBuffer::~TtxCudaBuffer() = default;
+auto TtxCudaBuffer::get_address() const -> U64 {
+  return 0;
+}
+
+auto TtxCudaBuffer::get_size() const -> GDExtensionInt {
+  return 0;
+}
+
+auto TtxCudaBuffer::write(const godot::PackedByteArray& bytes, GDExtensionInt offset)
+    -> bool {
+  return false;
+}
+
+auto TtxCudaBuffer::read() const -> godot::PackedByteArray {
+  return {};
+}
+
+#endif

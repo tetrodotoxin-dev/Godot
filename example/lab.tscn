@@ -1,0 +1,173 @@
+[gd_scene format=3 uid="uid://cm40q4ht1mic7"]
+
+[ext_resource type="Script" path="res://lab.gd" id="1"]
+[ext_resource type="Theme" uid="uid://b47m36c6hyvuj" path="res://theme.tres" id="2"]
+[ext_resource type="PackedScene" path="res://cards/render.tscn" id="3"]
+[ext_resource type="Resource" path="res://providers/gdscript.tres" id="5"]
+[ext_resource type="Resource" path="res://providers/project.tres" id="6"]
+[ext_resource type="Resource" uid="uid://b1kssor7vlrrc" path="res://providers/exposure.tres" id="7"]
+
+[sub_resource type="ImageTexture" id="Source"]
+
+[sub_resource type="ImageTexture" id="Overlay"]
+
+[node name="Lab" type="Control" unique_id=1008438922]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2")
+script = ExtResource("1")
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=700596401]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 26
+
+[node name="Page" type="VBoxContainer" parent="Margin" unique_id=345168575]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Heading" type="VBoxContainer" parent="Margin/Page" unique_id=1938427212]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Top" type="Label" parent="Margin/Page/Heading" unique_id=855717204]
+layout_mode = 2
+theme_type_variation = &"AccentLabel"
+theme_override_font_sizes/font_size = 13
+text = "Tetrodotoxin image lab"
+
+[node name="Title" type="Label" parent="Margin/Page/Heading" unique_id=573213287]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+theme_override_font_sizes/font_size = 34
+text = "Godot image rendering through different backends"
+
+[node name="Subtitle" type="Label" parent="Margin/Page/Heading" unique_id=1960824956]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Compare C++, GDScript and CUDA implementations of the same image operations."
+
+[node name="Controls" type="HBoxContainer" parent="Margin/Page" unique_id=1182411800]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Mode" type="OptionButton" parent="Margin/Page/Controls" unique_id=751049909]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Operations discovered from the connected renderers"
+
+[node name="Size" type="OptionButton" parent="Margin/Page/Controls" unique_id=1489432433]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Source dimensions"
+
+[node name="Kernel" type="OptionButton" parent="Margin/Page/Controls" unique_id=1887529288]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Normalized lens-blur kernel"
+
+[node name="Space" type="Control" parent="Margin/Page/Controls" unique_id=315679460]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ChangeSource" type="Button" parent="Margin/Page/Controls" unique_id=1336909392]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Change source"
+
+[node name="Compare" type="Button" parent="Margin/Page/Controls" unique_id=1954576632]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Run comparison"
+
+[node name="Previews" type="HBoxContainer" parent="Margin/Page" unique_id=331692868]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="Source" parent="Margin/Page/Previews" unique_id=126970192 instance=ExtResource("3")]
+layout_mode = 2
+display_name = "SOURCE"
+provider = ExtResource("5")
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+show_source = true
+
+[node name="Native" parent="Margin/Page/Previews" unique_id=88133044 instance=ExtResource("3")]
+layout_mode = 2
+display_name = "NATIVE C++"
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+
+[node name="Project" parent="Margin/Page/Previews" unique_id=1312417821 instance=ExtResource("3")]
+layout_mode = 2
+display_name = "PROJECT CUDA"
+provider = ExtResource("6")
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+policy = ExtResource("7")
+
+[node name="Script" parent="Margin/Page/Previews" unique_id=1720727971 instance=ExtResource("3")]
+layout_mode = 2
+display_name = "GDSCRIPT"
+provider = ExtResource("5")
+source_texture = SubResource("Source")
+overlay_texture = SubResource("Overlay")
+
+[node name="Summary" type="HBoxContainer" parent="Margin/Page" unique_id=599847708]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Status" type="Label" parent="Margin/Page/Summary" unique_id=1487243882]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "PREPARING RENDERERS"
+
+[node name="Difference" type="Label" parent="Margin/Page/Summary"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+
+[node name="Space" type="Control" parent="Margin/Page/Summary"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Elapsed" type="Label" parent="Margin/Page/Summary" unique_id=1674033996]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Synchronous request time, including input preparation, rendering, texture upload and output comparison. Deferred panel updates and screen presentation follow."
+theme_type_variation = &"MutedLabel"
+text = "Request pending"
+
+[node name="Interaction" type="HBoxContainer" parent="Margin/Page" unique_id=2057941520]
+layout_mode = 2
+
+[node name="Detail" type="Label" parent="Margin/Page/Interaction" unique_id=487224628]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "Move the overlay to update its connected renderers."
+
+[node name="MoveOverlay" type="Button" parent="Margin/Page/Interaction" unique_id=725861085]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Move overlay"
+
+[connection signal="pressed" from="Margin/Page/Controls/ChangeSource" to="." method="next_sample"]
+[connection signal="pressed" from="Margin/Page/Controls/Compare" to="." method="compare"]
+[connection signal="pressed" from="Margin/Page/Interaction/MoveOverlay" to="." method="move_overlay"]
