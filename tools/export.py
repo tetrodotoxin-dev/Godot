@@ -63,14 +63,19 @@ def publish_sources(demo, engine_source, template):
         template.read_bytes()).hexdigest()}
     repositories = {'godot': REPO}
     if CANDIDATE_ROOT:
-        repositories.update({name: CANDIDATE_ROOT / name for name in ('ttx', 'compute')})
+        repositories.update({
+            name: CANDIDATE_ROOT / name
+            for name in ('ttx', 'coherence', 'compute')
+        })
     for name, repository in repositories.items():
         if (repository / '.git').exists():
             paths = subprocess.check_output(
                 ['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'],
                 cwd=repository).decode().split('\0')
-            head = subprocess.check_output(
-                ['git', 'rev-parse', 'HEAD'], cwd=repository, text=True).strip()
+            revision = subprocess.run(
+                ['git', 'rev-parse', 'HEAD'], cwd=repository, text=True,
+                capture_output=True)
+            head = revision.stdout.strip() if revision.returncode == 0 else 'unborn'
         else:
             snapshot = json.loads((repository.parent / 'manifest.json').read_text())
             recorded = snapshot['repositories'][name]
@@ -98,23 +103,16 @@ def publish_sources(demo, engine_source, template):
     write_archive(source / 'lab-source.tar.gz', entries)
     (source / 'manifest.json').write_bytes(metadata)
 
-    pocketfft = bazel_files([
-        '@pocketfft//:LICENSE.md', '@pocketfft//:pocketfft_hdronly.h',
-    ], WEB_CONFIG)
     sdk_license, = bazel_files(['@godot_cpp_web//:LICENSE.md'], WEB_CONFIG)
-    write_archive(source / 'pocketfft.tar.gz', [
-        ('pocketfft/' + path.name, path.read_bytes(), False)
-        for path in sorted(pocketfft)
-    ])
     notices = {
         'Lab-MIT.txt': REPO / 'LICENSE',
         'Godot-MIT.txt': engine_source / 'LICENSE.txt',
         'Godot.txt': engine_source / 'COPYRIGHT.txt',
         'Godot-CPP-MIT.txt': sdk_license,
-        'PocketFFT-BSD.txt': next(path for path in pocketfft if path.name == 'LICENSE.md'),
+        'Coherence.txt': REPO / 'source/godot/licenses/Coherence.txt',
         'TTX.txt': REPO / 'source/godot/licenses/TTX.txt',
         'Perimortem.txt': REPO / 'source/godot/licenses/Perimortem.txt',
-        'Compute.txt': REPO / 'source/demo/licenses/Compute.txt',
+        'Compute.txt': REPO / 'source/godot/licenses/Compute.txt',
     }
     licenses = demo / 'licenses'
     licenses.mkdir()
@@ -129,7 +127,12 @@ def export_project(project, demo, template, modules, native_addon):
     addon.mkdir(parents=True)
     subprocess.run(['tar', '-xf', str(native_addon), '-C', str(project)], check=True)
     for module in modules:
-        destination = addon / 'web' / module.name
+        name = module.name
+        if module.suffix == '.json':
+            document = json.loads(module.read_text())
+            if isinstance(document, dict) and isinstance(document.get('library'), str):
+                name = document['library'] + '.json'
+        destination = addon / 'web' / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(module, destination)
 
@@ -187,7 +190,7 @@ def main():
     BAZEL_ARGS = args.bazel_arg
     if args.candidate_root:
         CANDIDATE_ROOT = args.candidate_root.resolve(strict=True)
-        for name in ('ttx', 'compute'):
+        for name in ('ttx', 'coherence', 'compute'):
             repository = CANDIDATE_ROOT / name
             subprocess.run(['bazel', 'build', ':sdk', '--config=release', *BAZEL_ARGS],
                            cwd=repository, check=True)
@@ -205,10 +208,11 @@ def main():
     args.work_dir.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    subprocess.run(['bazel', 'build', '//source/demo:addon', '--config=release', *BAZEL_ARGS], cwd=REPO, check=True)
-    native_addon, = bazel_files(['//source/demo:addon'], ['--config=release'])
-    subprocess.run(['bazel', 'build', '//source/demo:web_payload', *WEB_CONFIG, *BAZEL_ARGS], cwd=REPO, check=True)
-    modules = bazel_files(['//source/demo:web_payload'], WEB_CONFIG)
+    native_configuration = ['--config=release', '--config=cuda']
+    subprocess.run(['bazel', 'build', '//:demo_addon', *native_configuration, *BAZEL_ARGS], cwd=REPO, check=True)
+    native_addon, = bazel_files(['//:demo_addon'], native_configuration)
+    subprocess.run(['bazel', 'build', '//:demo_web_payload', *WEB_CONFIG, *BAZEL_ARGS], cwd=REPO, check=True)
+    modules = bazel_files(['//:demo_web_payload'], WEB_CONFIG)
 
     # A failed build or export leaves the requested output absent. All generated
     # state belongs to these temporary directories and can be discarded together.

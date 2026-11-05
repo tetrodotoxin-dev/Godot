@@ -5,12 +5,11 @@
 
 #include "perimortem/core/view/null_terminated.hpp"
 
+#include "godot_cpp/classes/project_settings.hpp"
+#include "godot_cpp/variant/utility_functions.hpp"
 #include "ttx/data/transfer.h"
 #include "ttx/graph/policies/none.h"
 #include "ttx/semantic/negotiation/library.h"
-
-#include "godot_cpp/classes/project_settings.hpp"
-#include "godot_cpp/variant/utility_functions.hpp"
 
 using namespace Perimortem::Core;
 using namespace Perimortem::Memory;
@@ -30,8 +29,9 @@ auto Modules::Imports::open(const godot::String& path)
 
 #ifdef TOOLCHAIN_WASM
 
-  // Godot stages Web shared objects beside the engine and preloads them by
-  // filename. The project keeps resource paths for export discovery.
+  // Web export preloads provider modules beside the engine under their
+  // filenames. The resource path remains in project settings so the exporter
+  // can discover the file, while the loader selects that preloaded filename.
   const auto location = path.get_file();
 
 #else
@@ -66,6 +66,8 @@ auto Modules::Imports::open(const godot::String& path)
                       if (ttx_transfer(&published, &destination) !=
                               TTX_DATA_SUCCESS ||
                           !entry.bind || !entry.supports) {
+                        godot::UtilityFunctions::push_warning(
+                            "TTX entry contract refused: ", location);
                         return;
                       }
 
@@ -76,7 +78,11 @@ auto Modules::Imports::open(const godot::String& path)
                             result = abstract;
                           },
 
-                          [&](Negotiation::Status status) {});
+                          [&](Negotiation::Status status) {
+                            godot::UtilityFunctions::push_warning(
+                                "TTX Abstract binding refused: ", location,
+                                " status ", U8(status));
+                          });
                     },
 
                     [&](View::Bytes error) {

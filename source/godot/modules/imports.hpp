@@ -8,10 +8,9 @@
 #include "perimortem/memory/global/vector.hpp"
 #include "perimortem/system/process/library.hpp"
 
-#include "ttx/graph/abstract.hpp"
-
 #include "godot_cpp/variant/array.hpp"
 #include "godot_cpp/variant/string.hpp"
+#include "ttx/graph/abstract.hpp"
 
 namespace Godot::Extension::Modules {
 

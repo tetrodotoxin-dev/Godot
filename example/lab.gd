@@ -34,8 +34,7 @@ func compare() -> void:
 	var next_dimensions := Vector2i(width, height)
 	var key := "%d:%d" % [width, sample_index]
 	if sample_key != key:
-		source_texture.set_image(Image.create_from_data(width, height, false,
-			Image.FORMAT_RGBA8, Sample.pixels(width, height, sample_index)))
+		_publish_source(width, height)
 		sample_key = key
 	if dimensions != next_dimensions:
 		dimensions = next_dimensions
@@ -68,9 +67,27 @@ func move_overlay() -> void:
 	_observe()
 	%Elapsed.text = "Request %.3f ms" % ((Time.get_ticks_usec() - started) / 1000.0)
 
+func select_mode(index: int) -> void:
+	if index == mode_choice.selected:
+		_refresh_choices()
+
+func select_size(index: int) -> void:
+	if index == size_choice.selected:
+		compare()
+
+func _publish_source(width: int, height: int) -> void:
+	source_texture = ImageTexture.create_from_image(Image.create_from_data(
+		width, height, false, Image.FORMAT_RGBA8,
+		Sample.pixels(width, height, sample_index)))
+	for source: TtxRender in _nodes("lab_sources"):
+		source.source_texture = source_texture
+
 func _publish_overlay() -> void:
-	overlay_texture.set_image(Image.create_from_data(dimensions.x, dimensions.y,
-		false, Image.FORMAT_RGBA8, Sample.overlay(dimensions.x, dimensions.y, overlay_index)))
+	overlay_texture = ImageTexture.create_from_image(Image.create_from_data(
+		dimensions.x, dimensions.y, false, Image.FORMAT_RGBA8,
+		Sample.overlay(dimensions.x, dimensions.y, overlay_index)))
+	for overlay: TtxRender in _nodes("lab_overlays"):
+		overlay.source_texture = overlay_texture
 
 func _nodes(group: StringName) -> Array[Node]:
 	return get_tree().get_nodes_in_group(group).filter(is_ancestor_of)

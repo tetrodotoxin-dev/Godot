@@ -81,7 +81,7 @@ class View extends RefCounted:
 						return admission.reason
 					return _wrap(callable.call(weights, width, height))
 			2:
-				return func(overlay: PackedByteArray): return _wrap(callable.call(overlay))
+				return func(overlay: RefCounted): return _wrap(callable.call(overlay))
 		return 1
 
 	func read_pixels() -> PackedByteArray:

@@ -7,11 +7,18 @@ bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_pkg", version = "1.3.0")
 bazel_dep(name = "tetro_toolchain", version = "0.5.0")
+bazel_dep(name = "ttx", version = "0.5.0")
+bazel_dep(name = "coherence", version = "0.1.0")
+bazel_dep(name = "compute", version = "0.1.0")
 archive_override(
     module_name = "tetro_toolchain",
     sha256 = "7ac4907656d23993b1912982e25741277e79f42ddc0a2792052f9acaa9a5b57b",
     urls = ["https://github.com/tetrodotoxin-dev/Toolchain/releases/download/v0.5.0/tetro_toolchain-0.5.0-source.tar.gz"],
 )
+local_path_override(module_name = "ttx", path = "../ttx")
+local_path_override(module_name = "coherence", path = "../coherence")
+local_path_override(module_name = "compute", path = "../compute")
+
 
 register_toolchains("@tetro_toolchain//:cc_toolchain_for_linux_x86_64", "@tetro_toolchain//:cc_toolchain_for_wasm32", "@tetro_toolchain//:cc_toolchain_for_wasm32_runner", "@tetro_toolchain//:cc_toolchain_for_windows_x64")
 
@@ -46,40 +53,6 @@ sdks.release(
 )
 use_repo(sdks, "perimortem", "perimortem_static")
 
-_CUDA_TTX_ARCHIVES = {
-    "headers": "cb18f5433ae552a0f8e005b5d8cb15040f63c160af0fdff4aabbe50b27966c17",
-    "linux-x86_64-v3-shared": "e0ffac476b16d0b8a670ac3347dca44356ced1a35dd96e0f015f7d4007c7c77c",
-    "linux-x86_64-v3-static": "ece5469d50c861d6906cdb3b908900939803101ace33324e18ff87a814a8a2c4",
-    "wasm32-emscripten-shared": "fe3c01d69aad0bce07a90d00a44894410d972e8260ea3abed9afd2970ccff0ff",
-    "wasm32-emscripten-static": "531418dc277ed7f85ba803471abb21f923ab71887b222cce169ce9648c9ac4f5",
-    "windows-x86_64-msvc-shared": "fedd42c8ee01e324e86d24abc6da07f73ec393a8d6120d07491e0eb532891cbc",
-    "windows-x86_64-msvc-static": "44087840a490976e24e9485a7d28cf0e4c4f116f265c4402c1e54852eac6cbaa",
-}
-
-sdks.release(
-    name = "ttx",
-    archives = _CUDA_TTX_ARCHIVES,
-    linkage = "shared",
-    project = "TTX",
-    version = "0.5.0",
-    deps = [
-        "@perimortem//:core",
-        "@perimortem//:memory",
-    ],
-)
-sdks.release(
-    name = "ttx_static",
-    archives = _CUDA_TTX_ARCHIVES,
-    library = "ttx",
-    linkage = "static",
-    project = "TTX",
-    version = "0.5.0",
-    deps = [
-        "@perimortem_static//:core",
-        "@perimortem_static//:memory",
-    ],
-)
-use_repo(sdks, "ttx", "ttx_static")
 
 godot_cpp_repository = use_repo_rule("//source/godot/build:sdk.bzl", "godot_cpp_repository")
 
@@ -90,17 +63,6 @@ godot_cpp_repository(
     profile = "//source/godot/build:profile.json",
 )
 
-http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-http_archive(
-    name = "pocketfft",
-    build_file = "//source/demo/imaging/cpu:pocketfft.BUILD.bazel",
-    sha256 = "2d90016da31a8cc1dd0ac0c89c1f2fb55df8f4ccc3f0386dcfbad09ac6d1c3ba",
-    strip_prefix = "pocketfft-c90e55b3d529f8efa40ed01a20de22405f45fc65",
-    type = "tar.gz",
-    urls = ["https://codeload.github.com/mreineck/pocketfft/tar.gz/c90e55b3d529f8efa40ed01a20de22405f45fc65"],
-)
-
 godot_cpp_repository(
     name = "godot_cpp_web",
     bits = "32",
@@ -108,66 +70,3 @@ godot_cpp_repository(
     generator = "//source/godot/build:generate.py",
     profile = "//source/godot/build:profile.json",
 )
-
-
-http_archive(
-    name = "compute_source",
-    sha256 = "a26966176e5b98cb01858627f00e93adc9bd09b15d5463b1b430594d8bea3a4e",
-    urls = ["https://github.com/tetrodotoxin-dev/Compute/releases/download/v0.1.0/compute-0.1.0-source.tar.gz"],
-)
-
-sdks.release(
-    name = "compute",
-    library = "compute",
-    project = "Compute",
-    version = "0.1.0",
-    linkage = "shared",
-    archives = {
-        "headers": "b72bb97b5391c9adb46ad73489c5b1a2daa6360d09cc5ea0d26355592e7592b7",
-        "linux-x86_64-v3-shared": "bb2fbfc7374c9de6a50edce961403a8919451089665c4d5304f56b693f712e74",
-        "linux-x86_64-v3-static": "d9a2251990d6611030d29fd247d3b494fd17c41bc1acf539986bebcb3e949f2e",
-        "wasm32-emscripten-shared": "de2aa0b7263b27d2910e44bc4a2b4c9fa8dd0cc273f732b1de187a873e5702bd",
-        "wasm32-emscripten-static": "51c8e0cfab50de5f6694a0037b2289de7310b8773b0c42a1a07262183e1185c1",
-        "windows-x86_64-msvc-shared": "06b8389c3c5963e0d39a52d2ebaa1f3828f78a5c99da329eb5adde87cca8130b",
-        "windows-x86_64-msvc-static": "0aef3166efdd3a0d440ae23b6ebb5830c3b8c6d42d7813c728604c526ce1346a",
-    },
-    deps = ["@ttx//:graph", "@perimortem//:memory"],
-)
-
-sdks.release(
-    name = "cpu",
-    library = "cpu",
-    project = "Compute",
-    version = "0.1.0",
-    linkage = "shared",
-    archives = {
-        "headers": "65b1973da3d3b9e2057970b7ba9d1edd900d228e6514f72e05ab248f9c2d6d4c",
-        "linux-x86_64-v3-shared": "4e7b1750646dd92a680830f1408a7445329097c222df42159c7997e30252a8f4",
-        "linux-x86_64-v3-static": "fe7a1c537fb9279e6e49de89752d0e607d99ba4fb2c2c3fce6c1deac886aca5c",
-        "wasm32-emscripten-shared": "b2a8662430104bfd0a28ba4bbde25d6477f81fe2df6732e8d541f38ecb5464b9",
-        "wasm32-emscripten-static": "2e5a6cef6c4c0644d5f14e832ca4acea64572e5fd9dffe0ede52c5c6daaf2402",
-        "windows-x86_64-msvc-shared": "2d2800dd7b8591cc79871a6efe65ca7cee3655530bea652b256143c24ac31dad",
-        "windows-x86_64-msvc-static": "fd5d138b59fd483de26e070473538eaf991bb56f16b1df2c7e4e8f44f388abc5",
-    },
-    deps = ["@ttx//:graph", "@perimortem//:memory"],
-)
-
-sdks.release(
-    name = "compute_cuda",
-    library = "cuda",
-    project = "Compute",
-    version = "0.1.0",
-    linkage = "shared",
-    archives = {
-        "headers": "3a093afd73d7a070f197a64f58d9c98dffdd724224d2558ce8684ce05accfb0b",
-        "linux-x86_64-v3-shared": "1edf7a7177595381269d2a831d44756d28cea9340a205a7ad29cb9f29c00ba59",
-        "linux-x86_64-v3-static": "6bf1376f36928ff895814816bac7ddb2ac091f241d44c6864ed28f3b3ad792a1",
-        "windows-x86_64-msvc-shared": "da7a0fe720cb9c9044e788ddae4ad11a44a246c24655f2cdee0198c0ac641c74",
-        "windows-x86_64-msvc-static": "fc65ed22e40338c1d7240b85cb838087b06f5b0974639c09c7cb01e3f7df01b6",
-    },
-    deps = ["@ttx//:graph", "@perimortem//:memory"],
-)
-use_repo(sdks, "compute", "cpu", "compute_cuda")
-
-sdks.component(name = "data", release = "ttx", deps = ["@perimortem//:core", "@perimortem//:memory"])
-sdks.component(name = "semantic", release = "ttx", deps = ["@perimortem//:core"])

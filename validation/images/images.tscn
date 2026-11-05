@@ -1,5 +1,0 @@
-[gd_scene load_steps=2 format=3]
-[ext_resource type="Script" path="res://images.gd" id="1"]
-[node name="Images" type="Label"]
-text="Validating image providers..."
-script=ExtResource("1")

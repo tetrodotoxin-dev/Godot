@@ -1,0 +1,6 @@
+[gd_resource type="Resource" format=3 uid="uid://cx31w8nr6j5ux"]
+
+[ext_resource type="Script" path="res://imaging/cuda_provider.gd" id="1"]
+
+[resource]
+script = ExtResource("1")

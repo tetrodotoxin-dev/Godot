@@ -4,7 +4,7 @@
 [ext_resource type="Theme" uid="uid://b47m36c6hyvuj" path="res://theme.tres" id="2"]
 [ext_resource type="PackedScene" path="res://cards/render.tscn" id="3"]
 [ext_resource type="Resource" path="res://providers/gdscript.tres" id="5"]
-[ext_resource type="Resource" path="res://providers/project.tres" id="6"]
+[ext_resource type="Resource" path="res://providers/cuda.tres" id="6"]
 [ext_resource type="Resource" uid="uid://b1kssor7vlrrc" path="res://providers/exposure.tres" id="7"]
 
 [sub_resource type="ImageTexture" id="Source"]
@@ -112,9 +112,9 @@ display_name = "NATIVE C++"
 source_texture = SubResource("Source")
 overlay_texture = SubResource("Overlay")
 
-[node name="Project" parent="Margin/Page/Previews" unique_id=1312417821 instance=ExtResource("3")]
+[node name="CUDA" parent="Margin/Page/Previews" unique_id=1312417821 instance=ExtResource("3")]
 layout_mode = 2
-display_name = "PROJECT CUDA"
+display_name = "CUDA"
 provider = ExtResource("6")
 source_texture = SubResource("Source")
 overlay_texture = SubResource("Overlay")
@@ -170,4 +170,6 @@ text = "Move overlay"
 
 [connection signal="pressed" from="Margin/Page/Controls/ChangeSource" to="." method="next_sample"]
 [connection signal="pressed" from="Margin/Page/Controls/Compare" to="." method="compare"]
+[connection signal="item_selected" from="Margin/Page/Controls/Mode" to="." method="select_mode"]
+[connection signal="item_selected" from="Margin/Page/Controls/Size" to="." method="select_size"]
 [connection signal="pressed" from="Margin/Page/Interaction/MoveOverlay" to="." method="move_overlay"]

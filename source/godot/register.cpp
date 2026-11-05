@@ -5,24 +5,26 @@
 
 #include "perimortem/memory/allocator/global.hpp"
 
-#include "godot/modules/classes.hpp"
-
+#include "godot/modules/registry.hpp"
 #include "godot_cpp/classes/project_settings.hpp"
 #include "godot_cpp/godot.hpp"
 
-static Godot::Extension::Modules::Classes* classes = nullptr;
+using namespace Godot::Extension;
+using namespace Perimortem::Core;
+using namespace Perimortem::Memory;
+using namespace Toolchain::Memory;
+
+static Modules::Registry* classes = nullptr;
 
 static auto initialize(godot::ModuleInitializationLevel level) -> void {
   if (level != godot::MODULE_INITIALIZATION_LEVEL_SCENE) {
     return;
   }
 
-  const auto allocation = Perimortem::Memory::Allocator::Global::allocate(
-      sizeof(Godot::Extension::Modules::Classes));
-  classes = &Toolchain::Memory::Lifetime::construct<
-      Godot::Extension::Modules::Classes>(allocation.get_data(), [] {
-    return Godot::Extension::Modules::Classes();
-  });
+  const auto allocation =
+      Allocator::Global::allocate(sizeof(Modules::Registry));
+  classes = &Lifetime::construct<Modules::Registry>(
+      allocation.get_data(), [] { return Modules::Registry(); });
 
   auto* settings = godot::ProjectSettings::get_singleton();
   if (!settings->has_setting("ttx/modules")) {
@@ -37,16 +39,15 @@ static auto terminate(godot::ModuleInitializationLevel level) -> void {
     return;
   }
 
-  classes->~Classes();
-  Perimortem::Memory::Allocator::Global::release(
-      Perimortem::Core::Data::cast<U8>(classes));
+  classes->~Registry();
+  Allocator::Global::release(Data::cast<U8>(classes));
   classes = nullptr;
 }
 
-C_LINKAGE GDExtensionBool GDE_EXPORT godot_ttx_init(
+C_LINKAGE GDE_EXPORT auto godot_ttx_init(
     GDExtensionInterfaceGetProcAddress address,
     GDExtensionClassLibraryPtr library,
-    GDExtensionInitialization* initialization) {
+    GDExtensionInitialization* initialization) -> GDExtensionBool {
   godot::GDExtensionBinding::InitObject init(address, library, initialization);
   init.register_initializer(initialize);
   init.register_terminator(terminate);

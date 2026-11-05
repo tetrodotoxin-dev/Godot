@@ -22,7 +22,7 @@ library(
     # static initialization before calling the extension entry point.
     linkopts = select({WEB: ["-Wl,--export=__wasm_call_ctors"], "//conditions:default": []}),
     win_def_file = "//source/godot/build:ttx_bridge.def",
-    implementation_deps = ["@ttx//:graph", "@perimortem//:system"] + select({WEB: ["@godot_cpp_web//:godot_cpp"], "//conditions:default": ["@godot_cpp//:godot_cpp"]}),
+    implementation_deps = ["@coherence//:compilation", "@compute//:compute", "@ttx//:graph", "@perimortem//:system"] + select({WEB: ["@godot_cpp_web//:godot_cpp"], "//conditions:default": ["@godot_cpp//:godot_cpp"]}),
 )
 
 sdk_libraries(name = "sdk_libraries", library = ":bridge")
@@ -42,9 +42,9 @@ pkg_files(
 
 pkg_files(
     name = "sdk_notices",
-    srcs = ["licenses/Perimortem.txt", "licenses/TTX.txt", "//:LICENSE", "@godot_cpp//:LICENSE.md"],
+    srcs = ["licenses/Coherence.txt", "licenses/Compute.txt", "licenses/Perimortem.txt", "licenses/TTX.txt", "//:LICENSE", "@godot_cpp//:LICENSE.md"],
     prefix = "licenses",
-    renames = {"//:LICENSE": "Godot-TTX.txt", "@godot_cpp//:LICENSE.md": "godot-cpp.txt", "licenses/TTX.txt": "TTX.txt", "licenses/Perimortem.txt": "Perimortem.txt"},
+    renames = {"//:LICENSE": "Godot-TTX.txt", "@godot_cpp//:LICENSE.md": "godot-cpp.txt", "licenses/Coherence.txt": "Coherence.txt", "licenses/Compute.txt": "Compute.txt", "licenses/TTX.txt": "TTX.txt", "licenses/Perimortem.txt": "Perimortem.txt"},
 )
 
 pkg_zip(name = "sdk", srcs = [":sdk_exporter", ":sdk_libraries", ":sdk_manifest", ":sdk_notices"], out = "godot-ttx-sdk.zip")

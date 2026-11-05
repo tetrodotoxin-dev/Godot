@@ -1,7 +1,6 @@
 [gd_resource type="Resource" load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://addons/godot_ttx/imaging/resources/module.gd" id="1"]
+[ext_resource type="Script" path="res://imaging/cpu_provider.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
-module = "cpu"

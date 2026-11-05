@@ -11,14 +11,12 @@ feature overrides select the corresponding libraries for an export.
 
 ## Image lab
 
-The [example project](example/project.godot) composes native C++, GDScript and
-project-authored CUDA image operations. Each provider controls its storage and
-execution. The scene compares their results and demonstrates selective updates:
-changing an overlay reuses the filtered image, while changing the source updates
-the connected pipeline.
+The [example project](example/project.godot) is GDScript. It loads the Compute
+CPU module and uses the generated Engine, Buffer and Commands classes alongside
+a script provider. Each provider controls its storage and execution. The scene
+compares their results and demonstrates selective updates.
 
-[Try the browser demo](https://tetrodotoxin.dev/lab/). Web uses the CPU and
-GDScript providers; CUDA requires a compatible native driver.
+[Try the browser demo](https://tetrodotoxin.dev/lab/).
 
 [![Image lab](example/preview.gif)](https://tetrodotoxin.dev/lab/)
 
@@ -33,18 +31,33 @@ bazel run :tests
 ```
 
 The SDK archive is `.bin/bin/source/godot/godot-ttx-sdk.zip`. Extract it into a
-Godot project. The image lab is a separate package:
+Godot project.
+
+Build the native addon, install it into the example and open the project in the
+Godot editor:
 
 ```sh
-tools/run.sh --cpu
+bazel build :demo_addon --config=release --config=cuda
+tools/install.sh example
+godot --editor --path example
 ```
 
-`source/godot/` owns the extension. `source/demo/` owns the independent native
-examples and the lab's Godot adapters. `example/` contains the ordinary Godot
-project; its scene and scripts are not part of the SDK. `tools/export.py` builds
-a Web export using a matching extension-enabled Godot template.
+Omit `--config=cuda` to package only the CPU provider. To build, install and run
+the native example directly:
 
-The public contracts remain in TTX. The bridge uses Describe for metadata,
-Type for declarations and representations, and Callable for ordered arguments
-and invocation. A successful Godot class publication requires complete supported
-bindings and retained provider access.
+```sh
+tools/run.sh
+```
+
+`tools/install.sh` accepts any existing Godot project directory. The project
+must contain `project.godot`.
+
+`source/godot/` owns the extension. `example/` contains the ordinary Godot
+project and its GDScript composition. It has no native build target and is not
+part of the SDK. `tools/export.py` builds a Web export using a matching
+extension-enabled Godot template.
+
+TTX supplies graph discovery and contract negotiation. Coherence supplies the
+Type, Field and Callable model that the bridge compiles into Godot classes and
+methods. A class is published only when its description, forms and provider
+access establish a complete usable binding.

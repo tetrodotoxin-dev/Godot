@@ -7,24 +7,28 @@
 
 #include "perimortem/memory/global/vector.hpp"
 
-#include "ttx/graph/capabilities/callable.hpp"
-
+#include "coherence/type_system/callable.hpp"
 #include "godot/values/field.hpp"
-
 #include "godot_cpp/core/memory.hpp"
 
 namespace Godot::Extension::Values {
 
-// Frame owns copied argument metadata and a canonical Representation of the
-// bridge's call storage. That form records every field's offset and alignment. Before each call, the bridge compares this complete form with
-// the provider's Invocation. Discovery therefore selects conversions without
-// assuming that visitation order establishes native offsets.
+// Frame owns Godot conversion metadata and one Representation compiled from a
+// Coherence Callable. Member frames include the receiver as their first hidden
+// Field. Explicit arguments follow in authored order. Frame recomputes their
+// local offsets and accepts them only when their extent and alignment agree
+// with the compiler's complete form.
 class Frame {
  public:
-  static auto arguments(Ttx::Graph::Capabilities::Callable callable)
-      -> Perimortem::Core::Storage::Option<Frame>;
-  static auto result(Ttx::Graph::Capabilities::Callable callable)
-      -> Perimortem::Core::Storage::Option<Frame>;
+  static auto arguments(
+      Coherence::TypeSystem::Callable::Contract callable,
+      const Ttx::Graph::Abstract* receiver,
+      const Ttx::Data::Form::Representation& form,
+      Field::Resolver resolver) -> Perimortem::Core::Storage::Option<Frame>;
+  static auto result(
+      Coherence::TypeSystem::Callable::Contract callable,
+      const Ttx::Data::Form::Representation& form,
+      Field::Resolver resolver) -> Perimortem::Core::Storage::Option<Frame>;
   auto get_representation() const -> const Ttx::Data::Form::Representation& {
     return form;
   }
@@ -37,7 +41,9 @@ class Frame {
   auto get_alignment() const -> Count { return form.get_alignment(); }
 
  private:
-  static auto compile(Perimortem::Memory::Global::Vector<Field> fields)
+  static auto compile(
+      Perimortem::Memory::Global::Vector<Field> fields,
+      const Ttx::Data::Form::Representation& form)
       -> Perimortem::Core::Storage::Option<Frame>;
   Frame(
       Ttx::Data::Form::Representation form,

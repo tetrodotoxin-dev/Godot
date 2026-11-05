@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://cards/render.gd" id="1"]
 
-[ext_resource type="Script" path="res://addons/godot_ttx/scene/render.gd" id="2"]
+[ext_resource type="Script" path="res://imaging/render.gd" id="2"]
 [ext_resource type="Theme" path="res://theme.tres" id="3"]
 [ext_resource type="Resource" path="res://providers/cpu.tres" id="4"]
 [ext_resource type="Resource" path="res://providers/gdscript.tres" id="5"]
@@ -61,7 +61,7 @@ text = "Preparing..."
 
 [node name="Pipeline" type="Node" parent="."]
 
-[node name="Input" type="Node" parent="Pipeline"]
+[node name="Input" type="Node" parent="Pipeline" groups=["lab_sources"]]
 unique_name_in_owner = true
 script = ExtResource("2")
 
@@ -71,7 +71,7 @@ script = ExtResource("2")
 input = NodePath("../Input")
 operation = "c5f32a68-1edf-425e-b817-59d7620fa301"
 
-[node name="Overlay" type="Node" parent="Pipeline"]
+[node name="Overlay" type="Node" parent="Pipeline" groups=["lab_overlays"]]
 unique_name_in_owner = true
 script = ExtResource("2")
 provider = ExtResource("5")

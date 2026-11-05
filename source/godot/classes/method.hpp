@@ -5,27 +5,27 @@
 
 #define TOOLCHAIN_PRIVATE_HEADER 1
 
-#include "perimortem/memory/global/bytes.hpp"
-
 #include "godot/values/frame.hpp"
 
 namespace Godot::Extension::Classes {
 
-// Method keeps a copied discovery route and the conversions advertised to
-// Godot. Runtime calls resolve that route on the retained instance and check
-// the newly supplied Invocation against these stored forms. Providers may
-// refuse a later call without changing Godot's registered method signature.
+// Method keeps one discovered Callable and the conversions advertised to
+// Godot. Runtime calls compile that Callable again and compare its resulting
+// Invocation with the forms fixed during registration. Providers may refuse a
+// later call without changing Godot's registered method signature.
 class Method {
  public:
   static auto compile(
-      Perimortem::Core::View::Bytes route,
-      Ttx::Graph::Abstract declaration)
+      Ttx::Graph::Abstract declaration,
+      Values::Field::Resolver resolver,
+      const Ttx::Graph::Abstract* receiver = nullptr)
       -> Perimortem::Core::Storage::Option<Method>;
   auto publish(const godot::StringName& class_name) -> void;
   auto get_name() const -> const godot::StringName& { return name; }
-  auto get_route() const -> Perimortem::Core::View::Bytes {
-    return route.get_view();
-  }
+  auto has_receiver() const -> bool { return bool(receiver); }
+
+  auto compile() const -> Coherence::Compilation::Compiler::Result<
+      Coherence::Compilation::Executable>;
 
   auto get_inputs() const -> const Godot::Extension::Values::Frame& {
     return inputs;
@@ -37,16 +37,19 @@ class Method {
 
  private:
   Method(
-      Perimortem::Core::View::Bytes route,
       godot::String name,
+      Ttx::Graph::Abstract callable,
+      Perimortem::Core::Storage::Option<Ttx::Graph::Abstract> receiver,
       Godot::Extension::Values::Frame inputs,
       Godot::Extension::Values::Frame outputs)
-      : route(route),
-        name(name),
+      : name(name),
+        callable(callable),
+        receiver(receiver),
         inputs(Perimortem::Core::Data::take(inputs)),
         outputs(Perimortem::Core::Data::take(outputs)) {}
-  Perimortem::Memory::Global::Bytes route;
   godot::StringName name;
+  Ttx::Graph::Abstract callable;
+  Perimortem::Core::Storage::Option<Ttx::Graph::Abstract> receiver;
   Godot::Extension::Values::Frame inputs;
   Godot::Extension::Values::Frame outputs;
 };

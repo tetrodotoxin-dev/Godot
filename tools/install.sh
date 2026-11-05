@@ -8,9 +8,9 @@ if [[ $# != 1 || ! -f "$1/project.godot" ]]; then
     echo "Usage: tools/install.sh /path/to/existing-godot-project" >&2
     exit 1
 fi
-archive="$repo_root/.bin/bin/source/demo/addon.tar"
+archive="$repo_root/.bin/bin/demo_addon.tar"
 if [[ ! -f "$archive" ]]; then
-    echo "Build //source/demo:addon with Bazel before installing." >&2
+    echo "Build :demo_addon with Bazel before installing." >&2
     exit 1
 fi
 addon_root="$1/addons/godot_ttx"
@@ -25,9 +25,6 @@ while IFS= read -r -d '' file; do
     mkdir -p -- "$(dirname -- "$addon_root/$relative")"
     mv -f -- "$file" "$addon_root/$relative"
 done < <(rg --files --hidden --null "$staging")
-# Policy moved from a Node script to a Resource. Leaving the old generated
-# script installed would register the same Godot class twice during upgrade.
-rm -f -- "$addon_root/scene/policy.gd" "$addon_root/scene/policy.gd.uid"
 inventory=$(tar -tf "$archive" | sed 's@^addons/godot_ttx/@@')
 for path in "$addon_root"/libcuda_provider.so "$addon_root"/libttx_cuda.so \
     "$addon_root"/libnvrtc*.so.* "$addon_root"/libcufft.so.* "$addon_root"/NVIDIA-*-LICENSE.txt; do
